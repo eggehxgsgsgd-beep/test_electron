@@ -1,11 +1,36 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CreateTodoInput, Todo, UpdateTodoInput } from '../shared/todo'
+import type {
+  CreateInsightInput,
+  CreateFocusSessionInput,
+  CreateTaskInput,
+  FocusDoApi,
+  FocusDoState,
+  TrayStateInput,
+  UpdateInsightInput,
+  UpdateSettingsInput,
+  UpdateTaskInput
+} from '../shared/todo'
 
-const todoApi = {
-  list: (): Promise<Todo[]> => ipcRenderer.invoke('todos:list'),
-  create: (input: CreateTodoInput): Promise<Todo[]> => ipcRenderer.invoke('todos:create', input),
-  update: (input: UpdateTodoInput): Promise<Todo[]> => ipcRenderer.invoke('todos:update', input),
-  delete: (id: string): Promise<Todo[]> => ipcRenderer.invoke('todos:delete', id)
+const focusDoApi: FocusDoApi = {
+  load: (): Promise<FocusDoState> => ipcRenderer.invoke('focusdo:load'),
+  createTask: (input: CreateTaskInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:task:create', input),
+  updateTask: (input: UpdateTaskInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:task:update', input),
+  deleteTask: (id: string): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:task:delete', id),
+  createInsight: (input: CreateInsightInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:insight:create', input),
+  updateInsight: (input: UpdateInsightInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:insight:update', input),
+  deleteInsight: (id: string): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:insight:delete', id),
+  updateSettings: (input: UpdateSettingsInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:settings:update', input),
+  recordFocusSession: (input: CreateFocusSessionInput): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:focus-session:create', input),
+  updateTray: (input: TrayStateInput): Promise<void> =>
+    ipcRenderer.invoke('focusdo:tray:update', input)
 }
 
-contextBridge.exposeInMainWorld('todos', todoApi)
+contextBridge.exposeInMainWorld('focusDo', focusDoApi)

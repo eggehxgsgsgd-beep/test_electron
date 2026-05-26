@@ -1,8 +1,8 @@
 {
-  "name": "electron-todo-learning",
+  "name": "focusdo",
   "version": "0.1.0",
-  "description": "A small Electron desktop todo app for learning Electron.",
-  "author": "Electron Todo Learner",
+  "description": "A focused desktop task, pomodoro, and insights app.",
+  "author": "FocusDo",
   "main": "./out/main/index.js",
   "type": "module",
   "scripts": {
@@ -13,12 +13,14 @@
   },
   "dependencies": {
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "5",
     "electron": "latest",
     "electron-builder": "latest",
@@ -26,14 +28,16 @@
     "typescript": "latest",
     "vite": "7"
   },
-  "build": {
-    "appId": "com.learning.electrontodo",
-    "productName": "Electron Todo",
+    "build": {
+    "appId": "com.focusdo.desktop",
+    "productName": "FocusDo",
+    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
     "files": [
       "out/**/*",
+      "build/icon.ico",
       "package.json"
     ],
     "win": {

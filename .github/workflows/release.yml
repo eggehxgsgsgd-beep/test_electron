@@ -10,18 +10,31 @@ on:
         description: 'Release tag, for example v0.1.0'
         required: true
         type: string
+      prerelease:
+        description: 'Mark release as prerelease'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release-windows:
     name: Build Windows Release
     runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,15 +45,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify build
+        run: npm run build
+
       - name: Build installer
         run: npm run dist:win
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FocusDo-Windows-${{ env.RELEASE_TAG }}
+          path: |
+            release/FocusDo-*-Setup.exe
+            release/latest.yml
+            release/*.blockmap
+          if-no-files-found: error
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: FocusDo ${{ env.RELEASE_TAG }}
           files: |
-            release/*.exe
-            release/*.yml
+            release/FocusDo-*-Setup.exe
+            release/latest.yml
             release/*.blockmap
           generate_release_notes: true
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
