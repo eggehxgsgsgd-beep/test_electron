@@ -36,24 +36,18 @@ jobs:
             dist_script: dist:win
             artifacts: |
               release/FocusDo-*-Setup.exe
-              release/latest.yml
-              release/*.blockmap
           - os: macos-latest
             label: macOS
             dist_script: dist:mac
             artifacts: |
               release/FocusDo-*.dmg
-              release/FocusDo-*-mac.zip
-              release/latest-mac.yml
-              release/*.blockmap
+              release/FocusDo-*.zip
           - os: ubuntu-latest
             label: Linux
             dist_script: dist:linux
             artifacts: |
               release/FocusDo-*.AppImage
               release/FocusDo-*.deb
-              release/latest-linux.yml
-              release/*.blockmap
 
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
