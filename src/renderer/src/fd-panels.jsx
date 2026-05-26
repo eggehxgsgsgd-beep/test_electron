@@ -693,32 +693,13 @@ function DataTab({ theme }) {
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, color: theme.text, marginBottom: 16 }}>数据</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {[
-          { label: '导出为 JSON', desc: '导出所有任务和专注记录' },
-          { label: '导出为 Markdown', desc: '导出任务列表为 Markdown 格式' },
-          { label: '导入数据', desc: '从 JSON 文件恢复' },
-          { label: '备份数据', desc: '创建完整数据备份' },
-        ].map((item, i) => (
-          <div key={i} style={{
-            padding: '12px 14px', borderRadius: 8, cursor: 'pointer',
-            border: `1px solid ${theme.borderL}`, transition: 'background 0.12s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = theme.hov}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <div style={{ fontSize: 13.5, fontWeight: 500, color: theme.text }}>{item.label}</div>
-            <div style={{ fontSize: 12, color: theme.muted, marginTop: 2 }}>{item.desc}</div>
-          </div>
-        ))}
-        <div style={{ height: 1, background: theme.borderL, margin: '8px 0' }} />
-        <div style={{
-          padding: '12px 14px', borderRadius: 8, cursor: 'pointer',
-          border: `1px solid ${theme.err}30`, color: theme.err, transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = theme.errBg}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-          <div style={{ fontSize: 13.5, fontWeight: 500 }}>清空所有数据</div>
-          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>此操作不可恢复</div>
+      <div style={{
+        padding: '14px 16px', borderRadius: 8,
+        border: `1px dashed ${theme.borderL}`, background: theme.hov,
+      }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: theme.text }}>导入、导出、备份功能即将上线</div>
+        <div style={{ fontSize: 12, color: theme.muted, marginTop: 4, lineHeight: 1.6 }}>
+          数据当前仅保存在本机的 SQLite 文件中（用户目录下的 focusdo.sqlite），跨设备同步与一键备份正在开发，敬请期待。
         </div>
       </div>
     </div>
@@ -738,7 +719,7 @@ function AboutTab({ theme }) {
           <span style={{ fontSize: 24, color: '#fff', fontWeight: 800 }}>F</span>
         </div>
         <div style={{ fontSize: 18, fontWeight: 700, color: theme.text }}>FocusDo</div>
-        <div style={{ fontSize: 13, color: theme.muted, marginTop: 4 }}>v1.0.0</div>
+        <div style={{ fontSize: 13, color: theme.muted, marginTop: 4 }}>v{__APP_VERSION__}</div>
         <div style={{ fontSize: 13, color: theme.sub, marginTop: 12, lineHeight: 1.6 }}>
           极简任务管理 + 番茄钟专注工具
         </div>

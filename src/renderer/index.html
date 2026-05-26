@@ -11,6 +11,11 @@
       ::selection { background: rgba(59,130,246,0.18); }
       input::placeholder, textarea::placeholder { color: inherit; opacity: 0.35; }
       ::-webkit-scrollbar { display: none; }
+      .fd-scroll::-webkit-scrollbar { display: block; width: 6px; height: 6px; }
+      .fd-scroll::-webkit-scrollbar-track { background: transparent; }
+      .fd-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 3px; }
+      .fd-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.32); }
+      .fd-scroll { scrollbar-gutter: stable; }
       textarea { font-family: inherit; }
       input[type=range] { height: 4px; }
       @keyframes fadeIn {

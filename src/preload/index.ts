@@ -5,6 +5,7 @@ import type {
   CreateTaskInput,
   FocusDoApi,
   FocusDoState,
+  NotifyInput,
   TrayStateInput,
   UpdateInsightInput,
   UpdateSettingsInput,
@@ -30,7 +31,8 @@ const focusDoApi: FocusDoApi = {
   recordFocusSession: (input: CreateFocusSessionInput): Promise<FocusDoState> =>
     ipcRenderer.invoke('focusdo:focus-session:create', input),
   updateTray: (input: TrayStateInput): Promise<void> =>
-    ipcRenderer.invoke('focusdo:tray:update', input)
+    ipcRenderer.invoke('focusdo:tray:update', input),
+  notify: (input: NotifyInput): Promise<void> => ipcRenderer.invoke('focusdo:notify', input)
 }
 
 contextBridge.exposeInMainWorld('focusDo', focusDoApi)

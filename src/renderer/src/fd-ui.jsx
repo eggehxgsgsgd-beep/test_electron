@@ -174,12 +174,6 @@ function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, ta
         <TaskCheckbox checked={task.done} onChange={() => onToggle(task.id)} theme={theme} />
       </div>
 
-      {task.priority === 'important' && !task.done && (
-        <div style={{ paddingTop: 2, color: theme.flag, flexShrink: 0 }}>
-          <FdIcon name="flag" size={15} color={theme.flag} />
-        </div>
-      )}
-
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: 14, fontWeight: 500, lineHeight: 1.55,
@@ -209,6 +203,12 @@ function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, ta
           </div>
         )}
       </div>
+
+      {task.priority === 'important' && !task.done && (
+        <div style={{ alignSelf: 'center', flexShrink: 0, lineHeight: 0 }} title="重要">
+          <FdIcon name="flag" size={14} color={theme.flag} />
+        </div>
+      )}
 
       {h && !task.done && onStartFocus && (
         <div onClick={e => { e.stopPropagation(); onStartFocus(task.id); }}
@@ -240,11 +240,13 @@ function AddTaskInput({ onAdd, theme }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10,
-      padding: '12px 16px',
-      borderTop: `1px solid ${focused ? theme.accent : theme.border}`,
-      transition: 'border-color 0.2s',
+      margin: '4px 20px 10px', padding: '10px 12px',
+      borderRadius: 8,
+      border: `1px solid ${focused ? theme.accent : theme.borderL}`,
+      background: focused ? theme.bg : theme.hov,
+      transition: 'border-color 0.15s, background 0.15s',
     }}>
-      <FdIcon name="plus" size={16} color={focused ? theme.accent : theme.muted} />
+      <FdIcon name="plus" size={15} color={focused ? theme.accent : theme.muted} />
       <input ref={ref} value={val} onChange={e => setVal(e.target.value)}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         onKeyDown={e => e.key === 'Enter' && submit()}
@@ -271,13 +273,15 @@ function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus,
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '22px 24px 8px' }}>
+      <div style={{ padding: '22px 24px 10px' }}>
         <h1 style={{
           fontSize: 22, fontWeight: 700, color: theme.text,
           letterSpacing: '-0.02em', margin: 0, lineHeight: 1.2,
         }}>{title}</h1>
         {subtitle && <div style={{ fontSize: 13, color: theme.sub, marginTop: 4 }}>{subtitle}</div>}
       </div>
+
+      <AddTaskInput onAdd={onAdd} theme={theme} />
 
       <div style={{ flex: 1, overflow: 'auto', scrollbarWidth: 'none' }}>
         {incomplete.length === 0 && completed.length === 0 && (
@@ -289,7 +293,7 @@ function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus,
               <circle cx="20" cy="20" r="16" stroke={theme.borderL} strokeWidth="2" strokeDasharray="4 4" />
               <path d="M14 21l4 4 8-8" stroke={theme.muted} strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <span style={{ fontSize: 14 }}>暂无任务，点击下方添加</span>
+            <span style={{ fontSize: 14 }}>暂无任务</span>
           </div>
         )}
 
@@ -311,8 +315,6 @@ function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus,
           </div>
         )}
       </div>
-
-      <AddTaskInput onAdd={onAdd} theme={theme} />
     </div>
   );
 }
@@ -324,7 +326,7 @@ function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus,
 function CircularTimer({ timeLeft, totalTime, size = 220, running, isBreak, theme }) {
   const r = (size - 14) / 2;
   const C = 2 * Math.PI * r;
-  const progress = totalTime > 0 ? timeLeft / totalTime : 1;
+  const progress = totalTime > 0 ? Math.min(1, Math.max(0, timeLeft / totalTime)) : 1;
   const offset = C * (1 - progress);
   const m = Math.floor(timeLeft / 60);
   const s = timeLeft % 60;
@@ -391,70 +393,6 @@ function FocusBtn({ primary, icon, label, onClick, disabled, theme, danger }) {
       {icon && <FdIcon name={icon} size={14} color={fg} />}
       {label}
     </button>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
-   TASK SELECTOR (in focus view)
-   ═══════════════════════════════════════════════════ */
-
-function TaskSelector({ tasks, selectedId, onChange, theme }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = tasks.find(t => t.id === selectedId);
-
-  useEffect(() => {
-    if (!open) return;
-    const fn = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, [open]);
-
-  return (
-    <div ref={ref} style={{ position: 'relative', width: 280 }}>
-      <div onClick={() => setOpen(!open)} style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 14px', borderRadius: 8,
-        border: `1px solid ${theme.border}`, background: theme.bg,
-        cursor: 'pointer', fontSize: 13.5, color: selected ? theme.text : theme.muted,
-      }}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {selected ? selected.title : '自由专注（不关联任务）'}
-        </span>
-        <FdIcon name="chevDown" size={14} color={theme.sub} />
-      </div>
-
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-          background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 10, overflow: 'auto',
-          maxHeight: 200,
-        }}>
-          <div onClick={() => { onChange(null); setOpen(false); }}
-            style={{
-              padding: '9px 14px', fontSize: 13, color: theme.sub,
-              cursor: 'pointer', borderBottom: `1px solid ${theme.borderL}`,
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = theme.hov}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            自由专注
-          </div>
-          {tasks.map(t => (
-            <div key={t.id} onClick={() => { onChange(t.id); setOpen(false); }}
-              style={{
-                padding: '9px 14px', fontSize: 13, color: theme.text,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = theme.hov}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              {t.priority === 'important' && <FdIcon name="flag" size={12} color={theme.flag} />}
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -544,10 +482,10 @@ function CompletionWithInsight({ taskId, taskTag, onComplete, onSaveInsight, the
    FOCUS VIEW (Pomodoro)
    ═══════════════════════════════════════════════════ */
 
-function FocusView({ pomo, incompleteTasks, onStart, onPause, onReset, onSkipBreak, onChangeTask,
+function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChangeTask,
   onDismissComplete, onCompleteTask, pomosToday, totalFocusMin, onSaveQuickInsight, theme }) {
 
-  const currentTask = pomo.taskId ? incompleteTasks.find(t => t.id === pomo.taskId) : null;
+  const currentTask = pomo.taskId ? (tasks || []).find(t => t.id === pomo.taskId) : null;
   const phaseLabel = {
     idle: '专注', focus: '专注中', shortBreak: '短休息', longBreak: '长休息',
   }[pomo.phase] || '专注';
@@ -570,13 +508,35 @@ function FocusView({ pomo, incompleteTasks, onStart, onPause, onReset, onSkipBre
           isBreak={pomo.phase === 'shortBreak' || pomo.phase === 'longBreak'}
           theme={theme} />
 
-        {/* Task selector */}
-        {pomo.phase === 'idle' && (
-          <TaskSelector tasks={incompleteTasks} selectedId={pomo.taskId}
-            onChange={onChangeTask} theme={theme} />
+        {/* Current task indicator */}
+        {pomo.phase === 'idle' && currentTask && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 12px', borderRadius: 20,
+            background: theme.accentBg, color: theme.accent,
+            fontSize: 13, fontWeight: 500, maxWidth: 360,
+          }}>
+            <span style={{
+              flex: 1, minWidth: 0, overflow: 'hidden',
+              textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }} title={currentTask.title}>{currentTask.title}</span>
+            <span onClick={(e) => { e.stopPropagation(); onChangeTask(null); }}
+              title="取消关联任务"
+              style={{
+                cursor: 'pointer', color: theme.accent, opacity: 0.6,
+                lineHeight: 1, padding: '0 2px',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}>×</span>
+          </div>
+        )}
+        {pomo.phase === 'idle' && !currentTask && (
+          <div style={{ fontSize: 12, color: theme.muted }}>
+            自由专注 · 可从任务列表点"专注"按钮以关联任务
+          </div>
         )}
 
-        {/* Current task label */}
+        {/* Running task label */}
         {pomo.phase !== 'idle' && currentTask && (
           <div style={{
             fontSize: 14, color: theme.sub, fontWeight: 500,
@@ -1008,7 +968,7 @@ function ArchiveItem({ task, onRestore, onDelete, theme }) {
 Object.assign(window, {
   FD_THEMES, DEFAULT_TAGS, QUICK_PLANS, formatPlanDate, buildTagColors,
   FdIcon, TaskCheckbox, TaskItem, AddTaskInput, TaskListView,
-  CircularTimer, FocusBtn, CompletionWithInsight, TaskSelector, FocusView,
+  CircularTimer, FocusBtn, CompletionWithInsight, FocusView,
   StatCard, Heatmap, StatsView,
   ArchiveView, ArchiveItem,
 });

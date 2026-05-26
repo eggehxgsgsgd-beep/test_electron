@@ -6,4 +6,5 @@ declare global {
   interface Window {
     focusDo: FocusDoApi
   }
+  const __APP_VERSION__: string
 }

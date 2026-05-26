@@ -371,89 +371,75 @@ function Sidebar({ activeTab, onTabChange, counts, pomo, onOpenSettings, theme }
   const pomoM = Math.floor(pomo.timeLeft / 60);
   const pomoS = pomo.timeLeft % 60;
 
-  const navItems = [
-    { id: 'today', label: '今天', count: counts.today, dotColor: theme.accent },
-    { id: 'all', label: '全部任务', count: counts.all },
+  const taskItems = [
+    { id: 'today', label: '今天', count: counts.today },
+    { id: 'all', label: '全部', count: counts.all },
+    { id: 'archive', label: '已归档', count: counts.archived },
+  ];
+  const mainItems = [
     { id: 'insights', label: 'Insights' },
     { id: 'focus', label: '专注', dotColor: pomoRunning ? theme.err || '#ef4444' : undefined,
       extra: pomoRunning ? `${String(pomoM).padStart(2,'0')}:${String(pomoS).padStart(2,'0')}` : null },
     { id: 'stats', label: '统计' },
   ];
 
-  return (
-    <div style={{
-      width: 180, flexShrink: 0, background: theme.side, display: 'flex', flexDirection: 'column',
-      borderRight: `1px solid ${theme.borderL}`, userSelect: 'none', padding: '12px 8px',
-    }}>
-      <div style={{ display: 'flex', gap: 8, padding: '6px 10px 20px' }}>
-        {['#ff5f57', '#febc2e', '#28c840'].map((c, i) => (
-          <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: c }} />
-        ))}
-      </div>
-
-      <div style={{
-        fontSize: 18, fontWeight: 700, color: theme.text, padding: '0 10px 24px',
-        letterSpacing: '-0.03em',
-      }}>FocusDo</div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {navItems.map(item => {
-          const active = activeTab === item.id;
-          const hovered = hovItem === item.id;
-          return (
-            <div key={item.id} onClick={() => onTabChange(item.id)}
-              onMouseEnter={() => setHovItem(item.id)} onMouseLeave={() => setHovItem(null)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 10px', borderRadius: 7, cursor: 'pointer',
-                background: active ? theme.accentBg : (hovered ? theme.hov : 'transparent'),
-                transition: 'background 0.1s',
-              }}>
-              <div style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: active ? theme.accent : (item.dotColor || theme.muted),
-                transition: 'background 0.15s',
-                animation: item.id === 'focus' && pomoRunning ? 'breathe 2s ease-in-out infinite' : 'none',
-              }} />
-              <span style={{
-                flex: 1, fontSize: 13.5, fontWeight: active ? 600 : 450,
-                color: active ? theme.text : theme.sub,
-              }}>{item.label}</span>
-              {item.extra && (
-                <span style={{
-                  fontSize: 11, fontFamily: theme.mono, fontWeight: 600,
-                  color: item.dotColor || theme.muted,
-                }}>{item.extra}</span>
-              )}
-              {item.count > 0 && !item.extra && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: theme.muted }}>{item.count}</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ height: 1, background: theme.borderL, margin: '12px 10px' }} />
-
-      <div onClick={() => onTabChange('archive')}
-        onMouseEnter={() => setHovItem('archive')} onMouseLeave={() => setHovItem(null)}
+  const renderItem = (item, indented) => {
+    const active = activeTab === item.id;
+    const hovered = hovItem === item.id;
+    return (
+      <div key={item.id} onClick={() => onTabChange(item.id)}
+        onMouseEnter={() => setHovItem(item.id)} onMouseLeave={() => setHovItem(null)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 10px', borderRadius: 7, cursor: 'pointer',
-          background: activeTab === 'archive' ? theme.accentBg : (hovItem === 'archive' ? theme.hov : 'transparent'),
+          padding: indented ? '7px 10px 7px 22px' : '8px 10px',
+          borderRadius: 7, cursor: 'pointer',
+          background: active ? theme.accentBg : (hovered ? theme.hov : 'transparent'),
           transition: 'background 0.1s',
         }}>
         <div style={{
           width: 7, height: 7, borderRadius: '50%',
-          background: activeTab === 'archive' ? theme.accent : theme.muted,
+          background: active ? theme.accent : (item.dotColor || theme.muted),
+          transition: 'background 0.15s',
+          animation: item.id === 'focus' && pomoRunning ? 'breathe 2s ease-in-out infinite' : 'none',
+          flexShrink: 0,
         }} />
         <span style={{
-          flex: 1, fontSize: 13.5, fontWeight: activeTab === 'archive' ? 600 : 450,
-          color: activeTab === 'archive' ? theme.text : theme.sub,
-        }}>已归档</span>
-        {counts.archived > 0 && (
-          <span style={{ fontSize: 11, fontWeight: 600, color: theme.muted }}>{counts.archived}</span>
+          flex: 1, fontSize: 13.5, fontWeight: active ? 600 : 450,
+          color: active ? theme.text : theme.sub,
+        }}>{item.label}</span>
+        {item.extra && (
+          <span style={{
+            fontSize: 11, fontFamily: theme.mono, fontWeight: 600,
+            color: item.dotColor || theme.muted,
+          }}>{item.extra}</span>
         )}
+        {item.count > 0 && !item.extra && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: theme.muted }}>{item.count}</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      width: 180, flexShrink: 0, background: theme.side, display: 'flex', flexDirection: 'column',
+      borderRight: `1px solid ${theme.borderL}`, userSelect: 'none', padding: '20px 8px 12px',
+    }}>
+      <div style={{
+        fontSize: 18, fontWeight: 700, color: theme.text, padding: '0 10px 22px',
+        letterSpacing: '-0.03em',
+      }}>FocusDo</div>
+
+      <div style={{
+        fontSize: 11, fontWeight: 600, color: theme.muted,
+        padding: '0 10px 6px', letterSpacing: '0.06em',
+      }}>任务</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginBottom: 14 }}>
+        {taskItems.map(item => renderItem(item, true))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {mainItems.map(item => renderItem(item, false))}
       </div>
 
       <div style={{ flex: 1 }} />
@@ -485,6 +471,7 @@ function App() {
   const [pomosToday, setPomosToday] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [systemThemeKey, setSystemThemeKey] = React.useState(getSystemThemeKey);
+  const [insightModal, setInsightModal] = React.useState(null);
 
   React.useEffect(() => {
     window.focusDo.load().then((state) => {
@@ -494,7 +481,23 @@ function App() {
       setFocusSessions(ui.focusSessions);
       setSettings(ui.settings);
       setLoading(false);
+    }).catch((err) => {
+      console.error('[FocusDo] load failed:', err);
+      window.alert(`FocusDo 出错：${err?.message ?? err}`);
+      setLoading(false);
     });
+  }, []);
+
+  React.useEffect(() => {
+    const onRejection = (event) => {
+      const reason = event.reason;
+      const message = reason?.message ?? String(reason ?? '未知错误');
+      console.error('[FocusDo] unhandled rejection:', reason);
+      window.alert(`FocusDo 出错：${message}`);
+      event.preventDefault();
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => window.removeEventListener('unhandledrejection', onRejection);
   }, []);
 
   const applyState = React.useCallback((state) => {
@@ -528,6 +531,19 @@ function App() {
   });
   const timerRef = React.useRef(null);
   const focusStartedAtRef = React.useRef(null);
+  const settingsRef = React.useRef(settings);
+  React.useEffect(() => { settingsRef.current = settings; }, [settings]);
+  const tasksRef = React.useRef(tasks);
+  React.useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+  const fireNotify = React.useCallback((flag, payload) => {
+    const s = settingsRef.current;
+    if (s.dnd) return;
+    if (!s[flag]) return;
+    if (typeof window.focusDo.notify === 'function') {
+      window.focusDo.notify(payload).catch(() => {});
+    }
+  }, []);
 
   React.useEffect(() => {
     if (pomo.phase === 'idle') {
@@ -551,15 +567,22 @@ function App() {
                 startedAt: focusStartedAtRef.current || new Date(Date.now() - prev.totalTime * 1000).toISOString(),
                 endedAt: new Date().toISOString(),
                 plannedDuration: prev.totalTime,
-                actualDuration: prev.totalTime - prev.timeLeft + 1,
+                actualDuration: Math.min(prev.totalTime, Math.max(0, prev.totalTime - prev.timeLeft + 1)),
                 status: 'completed',
                 type: 'focus',
               }).then(applyState);
               if (prev.taskId) {
-                const task = tasks.find(t => t.id === prev.taskId);
+                const task = tasksRef.current.find(t => t.id === prev.taskId);
                 if (task) updateTask(prev.taskId, { pomodoroCount: (task.pomodoroCount || 0) + 1 });
               }
+              focusStartedAtRef.current = null;
+              fireNotify('pomodoroNotify', { title: '番茄完成', body: '专注时段已结束，可以休息一下。' });
               return { ...prev, timeLeft: 0, showCompletion: true, consecutiveFocus: newConsec };
+            }
+            fireNotify('breakNotify', { title: '休息结束', body: '准备好开始下一个番茄了吗？' });
+            if (settingsRef.current.autoStart) {
+              focusStartedAtRef.current = new Date().toISOString();
+              return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'focus', showCompletion: false };
             }
             return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' };
           }
@@ -568,7 +591,7 @@ function App() {
       }, 1000);
     }
     return () => clearInterval(timerRef.current);
-  }, [pomo.phase, pomo.showCompletion, focusSec, tasks]);
+  }, [pomo.phase, pomo.showCompletion, focusSec, fireNotify]);
 
   const startFocus = (taskId) => {
     focusStartedAtRef.current = new Date().toISOString();
@@ -580,6 +603,18 @@ function App() {
     setActiveTab('focus');
   };
   const pauseTimer = () => {
+    if (focusStartedAtRef.current && pomo.phase === 'focus') {
+      window.focusDo.recordFocusSession({
+        taskId: pomo.taskId || null,
+        startedAt: focusStartedAtRef.current,
+        endedAt: new Date().toISOString(),
+        plannedDuration: pomo.totalTime,
+        actualDuration: Math.max(0, pomo.totalTime - pomo.timeLeft),
+        status: 'abandoned',
+        type: 'focus',
+      }).then(applyState);
+    }
+    focusStartedAtRef.current = null;
     window.focusDo.updateTray({ running: false });
     setPomo(p => ({ ...p, phase: 'idle' }));
   };
@@ -637,29 +672,43 @@ function App() {
     if (selectedTaskId === id) setSelectedTaskId(null);
   };
   const deleteTask = async (id) => {
+    if (!window.confirm('确定删除该任务？此操作不可恢复。')) return;
     const state = await window.focusDo.deleteTask(id);
     applyState(state);
     if (selectedTaskId === id) setSelectedTaskId(null);
   };
   const restoreTask = (id) => updateTask(id, { archived: false, completed: false });
   const updateSettings = async (updates) => {
+    const prev = settings;
     const next = { ...settings, ...updates };
     setSettings(next);
-    const state = await window.focusDo.updateSettings(settingsForBackend(next));
-    applyState(state);
+    try {
+      const state = await window.focusDo.updateSettings(settingsForBackend(next));
+      applyState(state);
+    } catch (err) {
+      setSettings(prev);
+      throw err;
+    }
   };
 
-  const addInsight = async (linkedTaskId) => {
-    const state = await window.focusDo.createInsight({ linkedTaskId: linkedTaskId || null, content: '' });
-    const ui = toUiState(state);
-    setTasks(ui.tasks);
-    setInsights(ui.insights);
-    setFocusSessions(ui.focusSessions);
-    setSettings(ui.settings);
-    setSelectedInsightId(ui.insights[0]?.id || null);
-    setActiveTab('insights');
+  const openInsightModal = React.useCallback((linkedTaskId) => {
+    setInsightModal({ defaultLinkedTaskId: linkedTaskId || null });
+  }, []);
+  const submitNewInsight = async ({ content, title, tag, linkedTaskId }) => {
+    const prevIds = new Set(insights.map(i => i.id));
+    const state = await window.focusDo.createInsight({
+      content: content || '',
+      title: title || null,
+      linkedTaskId: linkedTaskId || null,
+      tag: tag || null,
+    });
+    applyState(state);
+    setInsightModal(null);
+    const created = (state.insights || []).find(i => !prevIds.has(i.id));
+    if (created) setActiveTab('insights');
   };
   const saveQuickInsight = async ({ content, linkedTaskId, tag }) => {
+    // Called from the pomodoro completion dialog — content is guaranteed non-empty by caller.
     const state = await window.focusDo.createInsight({ content, linkedTaskId: linkedTaskId || null, tag: tag || null });
     applyState(state);
   };
@@ -668,6 +717,7 @@ function App() {
     applyState(state);
   };
   const deleteInsight = async (id) => {
+    if (!window.confirm('确定删除该洞察？此操作不可恢复。')) return;
     const state = await window.focusDo.deleteInsight(id);
     applyState(state);
     if (selectedInsightId === id) setSelectedInsightId(null);
@@ -697,20 +747,21 @@ function App() {
   React.useEffect(() => {
     const fn = (e) => {
       if (e.key === 'Escape') {
+        if (insightModal) return;  // modal handles its own Escape
         if (showSettings) { setShowSettings(false); return; }
         if (selectedTaskId) { setSelectedTaskId(null); return; }
         if (selectedInsightId) { setSelectedInsightId(null); return; }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); setShowSettings(true); }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
-        e.preventDefault(); addInsight(null);
+        e.preventDefault(); openInsightModal(null);
       }
       const tabMap = { '1': 'today', '2': 'all', '3': 'insights', '4': 'focus', '5': 'stats' };
       if ((e.metaKey || e.ctrlKey) && tabMap[e.key]) { e.preventDefault(); setActiveTab(tabMap[e.key]); }
     };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
-  }, [showSettings, selectedTaskId, selectedInsightId, activeTab]);
+  }, [showSettings, selectedTaskId, selectedInsightId, activeTab, insightModal, openInsightModal]);
 
   if (loading) {
     return (
@@ -751,7 +802,7 @@ function App() {
             onStartFocus={startFocus} onAdd={addTask} selectedTaskId={selectedTaskId} theme={theme} tagColors={tagColors} />
         )}
         {activeTab === 'focus' && (
-          <FocusView pomo={pomo} incompleteTasks={incompleteTasks}
+          <FocusView pomo={pomo} tasks={tasks}
             onStart={() => startFocus(pomo.taskId)}
             onPause={pauseTimer} onReset={resetTimer} onSkipBreak={skipBreak}
             onChangeTask={id => setPomo(p => ({ ...p, taskId: id }))}
@@ -762,7 +813,7 @@ function App() {
         {activeTab === 'insights' && !selectedInsightId && (
           <InsightsListView insights={insights} tasks={tasks}
             onClickInsight={id => setSelectedInsightId(id)}
-            onAdd={() => addInsight(null)}
+            onAdd={() => openInsightModal(null)}
             selectedId={selectedInsightId}
             tagList={tagList} tagColors={tagColors} theme={theme} />
         )}
@@ -815,6 +866,11 @@ function App() {
       <SettingsModal show={showSettings} onClose={() => setShowSettings(false)}
         settings={settings} onUpdateSettings={updateSettings}
         theme={theme} allThemes={FD_THEMES} />
+
+      <QuickInsightModal open={!!insightModal}
+        defaultLinkedTaskId={insightModal?.defaultLinkedTaskId || null}
+        tasks={tasks} tagList={tagList} tagColors={tagColors} theme={theme}
+        onSubmit={submitNewInsight} onCancel={() => setInsightModal(null)} />
     </div>
   );
 }

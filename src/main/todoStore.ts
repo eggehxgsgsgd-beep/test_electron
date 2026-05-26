@@ -31,6 +31,40 @@ const DEFAULT_SETTINGS: FocusSettings = {
 
 const now = (): string => new Date().toISOString()
 
+const VALID_PRIORITIES: ReadonlyArray<Task['priority']> = ['normal', 'important']
+const PLAN_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function validatePlanDate(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') {
+    throw new Error('planDate 格式无效')
+  }
+  if (value === 'today') return value
+  if (!PLAN_DATE_RE.test(value) || Number.isNaN(new Date(value).getTime())) {
+    throw new Error('planDate 格式无效')
+  }
+  return value
+}
+
+function validatePriority(value: unknown): Task['priority'] {
+  if (value === undefined || value === null) return 'normal'
+  if (typeof value !== 'string' || !VALID_PRIORITIES.includes(value as Task['priority'])) {
+    throw new Error(`priority 必须是 ${VALID_PRIORITIES.join(' / ')}`)
+  }
+  return value as Task['priority']
+}
+
+function validateTag(value: unknown, allowed: ReadonlyArray<string>): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') {
+    throw new Error('tag 格式无效')
+  }
+  if (!allowed.includes(value)) {
+    throw new Error(`tag "${value}" 不在允许集合中`)
+  }
+  return value
+}
+
 export class TodoStore {
   private sqlPromise: Promise<SqlJsStatic> | null = null
   private dbPromise: Promise<Database> | null = null
@@ -46,13 +80,14 @@ export class TodoStore {
   async createTask(input: CreateTaskInput): Promise<FocusDoState> {
     const title = input.title.trim()
     if (!title) return this.readState()
+    const planDate = validatePlanDate(input.planDate)
 
     const db = await this.getDb()
     db.run(
       `INSERT INTO tasks
         (id, title, notes, tag, priority, plan_date, completed, completed_at, created_at, pomodoro_count, archived, sort_order)
        VALUES (?, ?, '', NULL, 'normal', ?, 0, NULL, ?, 0, 0, ?)`,
-      [crypto.randomUUID(), title, input.planDate ?? todayKey(), now(), Date.now()]
+      [crypto.randomUUID(), title, planDate, now(), Date.now()]
     )
     return this.persistAndRead()
   }
@@ -61,6 +96,26 @@ export class TodoStore {
     const db = await this.getDb()
     const current = this.getTask(input.id)
     if (!current) return this.readState()
+
+    let title = current.title
+    if (input.title !== undefined) {
+      const t = input.title.trim()
+      if (!t) throw new Error('标题不能为空')
+      title = t
+    }
+    const priority =
+      input.priority === undefined ? current.priority : validatePriority(input.priority)
+    const planDate =
+      input.planDate === undefined ? current.planDate : validatePlanDate(input.planDate)
+    let tag: Task['tag'] = current.tag
+    if (input.tag !== undefined) {
+      if (input.tag === null) {
+        tag = null
+      } else {
+        const settings = await this.readSettings()
+        tag = validateTag(input.tag, settings.tags.map((t) => t.name)) as Task['tag']
+      }
+    }
 
     const completed =
       input.completed === undefined ? current.completed : Boolean(input.completed)
@@ -73,11 +128,11 @@ export class TodoStore {
         completed_at = ?, pomodoro_count = ?, archived = ?
        WHERE id = ?`,
       [
-        input.title === undefined ? current.title : input.title.trim() || current.title,
+        title,
         input.notes === undefined ? current.notes : input.notes,
-        input.tag === undefined ? current.tag : input.tag,
-        input.priority === undefined ? current.priority : input.priority,
-        input.planDate === undefined ? current.planDate : input.planDate,
+        tag,
+        priority,
+        planDate,
         completed ? 1 : 0,
         completedAt,
         input.pomodoroCount === undefined ? current.pomodoroCount : input.pomodoroCount,
@@ -93,10 +148,17 @@ export class TodoStore {
     const db = await this.getDb()
     db.run('DELETE FROM tasks WHERE id = ?', [id])
     db.run('UPDATE insights SET linked_task_id = NULL WHERE linked_task_id = ?', [id])
+    db.run('DELETE FROM focus_sessions WHERE task_id = ?', [id])
     return this.persistAndRead()
   }
 
   async createInsight(input: CreateInsightInput): Promise<FocusDoState> {
+    const title = input.title?.trim() || null
+    const content = (input.content ?? '').trim()
+    if (!title && !content) {
+      // Refuse to create a blank insight. Mirrors createTask's empty-title guard.
+      return this.readState()
+    }
     const db = await this.getDb()
     const timestamp = now()
     db.run(
@@ -105,8 +167,8 @@ export class TodoStore {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
-        input.title?.trim() || null,
-        input.content ?? '',
+        title,
+        content,
         input.tag ?? null,
         input.linkedTaskId ?? null,
         timestamp,
@@ -121,12 +183,23 @@ export class TodoStore {
     const current = this.getInsight(input.id)
     if (!current) return this.readState()
 
+    const nextTitle =
+      input.title === undefined ? current.title : input.title?.trim() || null
+    const nextContent =
+      input.content === undefined ? current.content : input.content
+    // Mirror createInsight's empty-guard: an insight without title AND without content
+    // (after trim) carries no information; reject so users either type something or
+    // delete the whole record explicitly.
+    if (!nextTitle && !(nextContent ?? '').trim()) {
+      throw new Error('Insight 不能完全为空，请删除整条')
+    }
+
     db.run(
       `UPDATE insights SET title = ?, content = ?, tag = ?, linked_task_id = ?, updated_at = ?
        WHERE id = ?`,
       [
-        input.title === undefined ? current.title : input.title?.trim() || null,
-        input.content === undefined ? current.content : input.content,
+        nextTitle,
+        nextContent,
         input.tag === undefined ? current.tag : input.tag,
         input.linkedTaskId === undefined ? current.linkedTaskId : input.linkedTaskId,
         now(),
@@ -150,13 +223,21 @@ export class TodoStore {
 
   async recordFocusSession(input: CreateFocusSessionInput): Promise<FocusDoState> {
     const db = await this.getDb()
+    // If the referenced task was deleted between focus start and end, fall back to
+    // a free-focus session rather than throwing — preserves the user's work while
+    // avoiding a dangling foreign reference.
+    let taskId: string | null = input.taskId ?? null
+    if (taskId && !this.getTask(taskId)) {
+      console.warn(`[FocusDo] recordFocusSession: task ${taskId} not found, recording as free focus`)
+      taskId = null
+    }
     db.run(
       `INSERT INTO focus_sessions
         (id, task_id, started_at, ended_at, planned_duration, actual_duration, status, type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
-        input.taskId ?? null,
+        taskId,
         input.startedAt,
         input.endedAt,
         input.plannedDuration,
@@ -390,11 +471,25 @@ export class TodoStore {
   }
 
   private async persistDb(db: Database): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true })
-    await writeFile(this.filePath, Buffer.from(db.export()))
+    try {
+      await mkdir(dirname(this.filePath), { recursive: true })
+      await writeFile(this.filePath, Buffer.from(db.export()))
+    } catch (error) {
+      console.error('[FocusDo] persistDb failed:', error)
+      throw new Error(
+        `保存失败：${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
 
-  private countRows(db: Database, table: string): number {
+  private countRows(
+    db: Database,
+    table: 'tasks' | 'insights' | 'focus_sessions' | 'settings'
+  ): number {
+    const ALLOWED = ['tasks', 'insights', 'focus_sessions', 'settings'] as const
+    if (!ALLOWED.includes(table)) {
+      throw new Error(`countRows: 不允许的表名 ${table}`)
+    }
     const result = db.exec(`SELECT COUNT(*) AS count FROM ${table}`)
     return Number(result[0]?.values[0]?.[0] ?? 0)
   }
@@ -433,11 +528,11 @@ function rowToTask(row: unknown[]): Task {
     tag: (row[3] as Task['tag']) ?? null,
     priority: (row[4] as Task['priority']) ?? 'normal',
     planDate: (row[5] as string | null) ?? null,
-    completed: Boolean(row[6]),
+    completed: Number(row[6]) === 1,
     completedAt: (row[7] as string | null) ?? null,
     createdAt: String(row[8]),
     pomodoroCount: Number(row[9] ?? 0),
-    archived: Boolean(row[10]),
+    archived: Number(row[10]) === 1,
     sortOrder: Number(row[11] ?? 0)
   }
 }

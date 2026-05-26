@@ -108,6 +108,11 @@ export type TrayStateInput = {
   phase?: string
 }
 
+export type NotifyInput = {
+  title: string
+  body?: string
+}
+
 export type FocusDoApi = {
   load: () => Promise<FocusDoState>
   createTask: (input: CreateTaskInput) => Promise<FocusDoState>
@@ -119,4 +124,5 @@ export type FocusDoApi = {
   updateSettings: (input: UpdateSettingsInput) => Promise<FocusDoState>
   recordFocusSession: (input: CreateFocusSessionInput) => Promise<FocusDoState>
   updateTray: (input: TrayStateInput) => Promise<void>
+  notify: (input: NotifyInput) => Promise<void>
 }

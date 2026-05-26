@@ -1,10 +1,11 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeImage, shell } from 'electron'
 import { TodoStore } from './todoStore'
 import type {
   CreateFocusSessionInput,
   CreateInsightInput,
   CreateTaskInput,
+  NotifyInput,
   TrayStateInput,
   UpdateInsightInput,
   UpdateSettingsInput,
@@ -95,6 +96,19 @@ function registerFocusDoHandlers(): void {
   ipcMain.handle('focusdo:tray:update', (_event, input: TrayStateInput) => {
     trayState = input
     updateTrayMenu()
+  })
+  ipcMain.handle('focusdo:notify', (_event, input: NotifyInput) => {
+    if (!Notification.isSupported()) return
+    try {
+      new Notification({
+        title: input.title,
+        body: input.body ?? '',
+        icon: appIconPath,
+        silent: false
+      }).show()
+    } catch (error) {
+      console.error('[FocusDo] notify failed:', error)
+    }
   })
 }
 
