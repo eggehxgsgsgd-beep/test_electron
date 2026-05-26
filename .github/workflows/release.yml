@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, for example v0.1.0'
+        description: 'Release tag, for example v0.2.0'
         required: true
         type: string
       prerelease:
@@ -24,11 +24,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release-windows:
-    name: Build Windows Release
-    runs-on: windows-latest
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            dist_script: dist:win
+            artifacts: |
+              release/FocusDo-*-Setup.exe
+              release/latest.yml
+              release/*.blockmap
+          - os: macos-latest
+            label: macOS
+            dist_script: dist:mac
+            artifacts: |
+              release/FocusDo-*.dmg
+              release/FocusDo-*-mac.zip
+              release/latest-mac.yml
+              release/*.blockmap
+          - os: ubuntu-latest
+            label: Linux
+            dist_script: dist:linux
+            artifacts: |
+              release/FocusDo-*.AppImage
+              release/FocusDo-*.deb
+              release/latest-linux.yml
+              release/*.blockmap
+
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -49,26 +78,21 @@ jobs:
         run: npm run build
 
       - name: Build installer
-        run: npm run dist:win
+        run: npm run ${{ matrix.dist_script }}
 
-      - name: Upload release artifacts
+      - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FocusDo-Windows-${{ env.RELEASE_TAG }}
-          path: |
-            release/FocusDo-*-Setup.exe
-            release/latest.yml
-            release/*.blockmap
+          name: FocusDo-${{ matrix.label }}-${{ env.RELEASE_TAG }}
+          path: ${{ matrix.artifacts }}
           if-no-files-found: error
 
-      - name: Publish GitHub release
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: FocusDo ${{ env.RELEASE_TAG }}
-          files: |
-            release/FocusDo-*-Setup.exe
-            release/latest.yml
-            release/*.blockmap
+          files: ${{ matrix.artifacts }}
           generate_release_notes: true
           prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+          fail_on_unmatched_files: true

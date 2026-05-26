@@ -1,6 +1,6 @@
 {
   "name": "focusdo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A focused desktop task, pomodoro, and insights app.",
   "author": "FocusDo",
   "main": "./out/main/index.js",
@@ -9,6 +9,8 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
     "preview": "electron-vite preview"
   },
   "dependencies": {
@@ -31,16 +33,17 @@
     "build": {
     "appId": "com.focusdo.desktop",
     "productName": "FocusDo",
-    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
     "files": [
       "out/**/*",
       "build/icon.ico",
+      "build/icon.png",
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -55,6 +58,39 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "category": "Utility",
+      "synopsis": "Focus, tasks, and insights",
+      "description": "A focused desktop task, pomodoro, and insights app."
     }
   }
 }
