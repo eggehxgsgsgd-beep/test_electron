@@ -32,11 +32,14 @@ export type TagOption = {
   color: string
 }
 
+export type FocusScene = 'forest' | 'sea' | 'mountain'
+
 export type FocusSettings = {
   theme: 'clear' | 'dusk' | 'moss'
   focusMinutes: number
   shortBreakMinutes: number
   longBreakMinutes: number
+  focusScene: FocusScene
   tags: TagOption[]
 }
 
@@ -113,11 +116,27 @@ export type NotifyInput = {
   body?: string
 }
 
+// Snapshot of the focus phase currently running on the renderer side, persisted
+// to disk so a crash / force-quit during a pomodoro can be recovered as an
+// abandoned session on next launch instead of silently lost.
+export type InFlightFocus = {
+  taskId: string | null
+  startedAt: string
+  startedAtMs: number
+  plannedDuration: number
+}
+
+export type ExportResult =
+  | { ok: true; path: string }
+  | { ok: false; cancelled: true }
+  | { ok: false; error: string }
+
 export type FocusDoApi = {
   load: () => Promise<FocusDoState>
   createTask: (input: CreateTaskInput) => Promise<FocusDoState>
   updateTask: (input: UpdateTaskInput) => Promise<FocusDoState>
   deleteTask: (id: string) => Promise<FocusDoState>
+  incrementPomodoroCount: (id: string) => Promise<FocusDoState>
   createInsight: (input: CreateInsightInput) => Promise<FocusDoState>
   updateInsight: (input: UpdateInsightInput) => Promise<FocusDoState>
   deleteInsight: (id: string) => Promise<FocusDoState>
@@ -125,4 +144,6 @@ export type FocusDoApi = {
   recordFocusSession: (input: CreateFocusSessionInput) => Promise<FocusDoState>
   updateTray: (input: TrayStateInput) => Promise<void>
   notify: (input: NotifyInput) => Promise<void>
+  setInFlightFocus: (snapshot: InFlightFocus | null) => Promise<void>
+  exportData: () => Promise<ExportResult>
 }

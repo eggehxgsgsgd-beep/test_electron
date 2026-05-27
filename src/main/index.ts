@@ -1,10 +1,12 @@
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { TodoStore } from './todoStore'
 import type {
   CreateFocusSessionInput,
   CreateInsightInput,
   CreateTaskInput,
+  InFlightFocus,
   NotifyInput,
   TrayStateInput,
   UpdateInsightInput,
@@ -80,6 +82,9 @@ function registerFocusDoHandlers(): void {
     todoStore.updateTask(input)
   )
   ipcMain.handle('focusdo:task:delete', (_event, id: string) => todoStore.deleteTask(id))
+  ipcMain.handle('focusdo:task:increment-pomodoro', (_event, id: string) =>
+    todoStore.incrementPomodoroCount(id)
+  )
   ipcMain.handle('focusdo:insight:create', (_event, input: CreateInsightInput) =>
     todoStore.createInsight(input)
   )
@@ -109,6 +114,57 @@ function registerFocusDoHandlers(): void {
     } catch (error) {
       console.error('[FocusDo] notify failed:', error)
     }
+  })
+  ipcMain.handle('focusdo:in-flight:set', (_event, snapshot: InFlightFocus | null) =>
+    todoStore.setInFlightFocus(snapshot)
+  )
+  ipcMain.handle('focusdo:data:export', async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender)
+    const defaultName = `focusdo-export-${new Date().toISOString().slice(0, 10)}.json`
+    const opts = {
+      title: '导出 FocusDo 数据',
+      defaultPath: defaultName,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    }
+    const picked = parent
+      ? await dialog.showSaveDialog(parent, opts)
+      : await dialog.showSaveDialog(opts)
+    if (picked.canceled || !picked.filePath) return { ok: false, cancelled: true }
+    try {
+      const snapshot = await todoStore.exportSnapshot()
+      const payload = {
+        meta: {
+          exportedAt: new Date().toISOString(),
+          version: app.getVersion(),
+          appName: 'FocusDo'
+        },
+        tasks: snapshot.tasks,
+        insights: snapshot.insights,
+        focusSessions: snapshot.focusSessions,
+        settings: snapshot.settings
+      }
+      await writeFile(picked.filePath, JSON.stringify(payload, null, 2), 'utf8')
+      return { ok: true, path: picked.filePath }
+    } catch (error) {
+      console.error('[FocusDo] export failed:', error)
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+}
+
+// Single-instance lock: sql.js has no on-disk concurrency control, so two
+// FocusDo processes opening the same sqlite would race on writeFile.  If
+// another instance is already running, focus its window instead of starting
+// a new one.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    showMainWindow()
   })
 }
 

@@ -1,4 +1,5 @@
 // fd-insights.jsx — FocusDo: Insights (复盘/知识沉淀) Module
+import emptyInsightsUrl from './assets/empty-insights.webp';
 
 /* ═══════════════════════════════════════════════════
    INSIGHT ITEM (list row)
@@ -82,8 +83,9 @@ function InsightsListView({ insights, tasks, onClickInsight, onAdd, selectedId, 
         (i.content || '').toLowerCase().includes(q)
       );
     }
-    // Sort by createdAt descending
-    return [...result].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    // Sort by createdAt descending. createdAt is NOT NULL TEXT per schema, so
+    // no fallback needed.
+    return [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [insights, filterTag, search]);
 
   return (
@@ -172,7 +174,15 @@ function InsightsListView({ insights, tasks, onClickInsight, onAdd, selectedId, 
 
       {/* List */}
       <div style={{ flex: 1, overflow: 'auto', scrollbarWidth: 'none' }}>
-        {filtered.length === 0 && (
+        {/* Truly empty (zero records) — full illustration */}
+        {insights.length === 0 && (
+          <EmptyState src={emptyInsightsUrl}
+            title="还没有 Insights"
+            subtitle="记录你的第一个想法"
+            theme={theme} />
+        )}
+        {/* Has data but current filter/search returns nothing — small hint */}
+        {insights.length > 0 && filtered.length === 0 && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', height: 160, color: theme.muted, gap: 8,
@@ -181,9 +191,7 @@ function InsightsListView({ insights, tasks, onClickInsight, onAdd, selectedId, 
               stroke={theme.borderL} strokeWidth="1.5" strokeLinecap="round">
               <path d="M9 12h6M12 9v6M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span style={{ fontSize: 14 }}>
-              {search ? '没有匹配的 Insight' : '还没有 Insight'}
-            </span>
+            <span style={{ fontSize: 14 }}>没有匹配的 Insight</span>
           </div>
         )}
         {filtered.map(ins => (
@@ -225,17 +233,23 @@ function InsightFullPage({ insight, onBack, onUpdate, onDelete, tasks, tagList, 
     }, 50);
   }, [insight.id]);
 
-  const autoSave = React.useCallback((updates) => {
+  // Build full diff from current refs at fire time. Previously the autoSave
+  // took the latest changed field as `updates`, but a quick title→content
+  // sequence within 1s would clear the title timer and only persist the
+  // content update — losing the title change. Now we always recompute the
+  // full diff so no in-progress edit gets dropped.
+  const autoSave = React.useCallback(() => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      // Skip persistence if applying this update would leave the insight fully empty.
-      // Use refs so we read the *latest* user input at fire time, not stale closure values.
-      const nextTitle = 'title' in updates ? (updates.title || '') : titleRef.current;
-      const nextContent = 'content' in updates ? (updates.content || '') : contentValRef.current;
-      if (!String(nextTitle).trim() && !String(nextContent).trim()) return;
-      onUpdate(insight.id, updates);
+      const t = titleRef.current;
+      const c = contentValRef.current;
+      if (!t.trim() && !c.trim()) return;
+      const updates = {};
+      if (t !== (insight.title || '')) updates.title = t.trim() || null;
+      if (c !== (insight.content || '')) updates.content = c;
+      if (Object.keys(updates).length) onUpdate(insight.id, updates);
     }, 1000);
-  }, [insight.id, onUpdate]);
+  }, [insight.id, insight.title, insight.content, onUpdate]);
 
   const flushSave = React.useCallback(() => {
     clearTimeout(saveTimerRef.current);
@@ -257,8 +271,8 @@ function InsightFullPage({ insight, onBack, onUpdate, onDelete, tasks, tagList, 
     return () => { window.removeEventListener('keydown', fn); flushSave(); };
   }, [handleBack, flushSave]);
 
-  const handleTitleChange = (v) => { setTitle(v); autoSave({ title: v.trim() || null }); };
-  const handleContentChange = (v) => { setContent(v); autoSave({ content: v }); };
+  const handleTitleChange = (v) => { setTitle(v); autoSave(); };
+  const handleContentChange = (v) => { setContent(v); autoSave(); };
   const setTag = (tag) => onUpdate(insight.id, { tag: insight.tag === tag ? null : tag });
   const setLinkedTask = (taskId) => onUpdate(insight.id, { linkedTaskId: taskId });
 

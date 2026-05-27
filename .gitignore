@@ -26,3 +26,7 @@ Thumbs.db
 
 # Electron builder cache
 *.blockmap
+
+# Original-quality asset masters — kept locally for re-export, never shipped.
+# Compressed variants in src/renderer/src/assets/ are checked in.
+src/renderer/src/assets/source/

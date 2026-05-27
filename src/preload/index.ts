@@ -3,8 +3,10 @@ import type {
   CreateInsightInput,
   CreateFocusSessionInput,
   CreateTaskInput,
+  ExportResult,
   FocusDoApi,
   FocusDoState,
+  InFlightFocus,
   NotifyInput,
   TrayStateInput,
   UpdateInsightInput,
@@ -20,6 +22,8 @@ const focusDoApi: FocusDoApi = {
     ipcRenderer.invoke('focusdo:task:update', input),
   deleteTask: (id: string): Promise<FocusDoState> =>
     ipcRenderer.invoke('focusdo:task:delete', id),
+  incrementPomodoroCount: (id: string): Promise<FocusDoState> =>
+    ipcRenderer.invoke('focusdo:task:increment-pomodoro', id),
   createInsight: (input: CreateInsightInput): Promise<FocusDoState> =>
     ipcRenderer.invoke('focusdo:insight:create', input),
   updateInsight: (input: UpdateInsightInput): Promise<FocusDoState> =>
@@ -32,7 +36,10 @@ const focusDoApi: FocusDoApi = {
     ipcRenderer.invoke('focusdo:focus-session:create', input),
   updateTray: (input: TrayStateInput): Promise<void> =>
     ipcRenderer.invoke('focusdo:tray:update', input),
-  notify: (input: NotifyInput): Promise<void> => ipcRenderer.invoke('focusdo:notify', input)
+  notify: (input: NotifyInput): Promise<void> => ipcRenderer.invoke('focusdo:notify', input),
+  setInFlightFocus: (snapshot: InFlightFocus | null): Promise<void> =>
+    ipcRenderer.invoke('focusdo:in-flight:set', snapshot),
+  exportData: (): Promise<ExportResult> => ipcRenderer.invoke('focusdo:data:export')
 }
 
 contextBridge.exposeInMainWorld('focusDo', focusDoApi)

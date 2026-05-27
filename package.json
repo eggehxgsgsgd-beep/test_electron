@@ -1,6 +1,6 @@
 {
   "name": "focusdo",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A focused desktop task, pomodoro, and insights app.",
   "author": "FocusDo",
   "main": "./out/main/index.js",
@@ -14,6 +14,7 @@
     "preview": "electron-vite preview"
   },
   "dependencies": {
+    "lottie-web": "^5.13.0",
     "react": "latest",
     "react-dom": "latest",
     "sql.js": "^1.14.1"
@@ -27,10 +28,11 @@
     "electron": "latest",
     "electron-builder": "latest",
     "electron-vite": "latest",
+    "sharp": "^0.34.5",
     "typescript": "latest",
     "vite": "7"
   },
-    "build": {
+  "build": {
     "appId": "com.focusdo.desktop",
     "productName": "FocusDo",
     "directories": {
@@ -64,11 +66,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
@@ -81,11 +89,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",

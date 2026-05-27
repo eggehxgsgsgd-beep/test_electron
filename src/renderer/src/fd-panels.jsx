@@ -1,44 +1,6 @@
 // fd-panels.jsx — FocusDo V2: Detail Panel + Settings Modal
 
 /* ═══════════════════════════════════════════════════
-   SUBTASK ITEM
-   ═══════════════════════════════════════════════════ */
-
-function SubtaskItem({ subtask, onToggle, onDelete, theme }) {
-  const [h, setH] = React.useState(false);
-  return (
-    <div onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
-      }}>
-      <div onClick={onToggle} style={{
-        width: 16, height: 16, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
-        border: `1.5px solid ${subtask.done ? theme.done : theme.border}`,
-        background: subtask.done ? theme.done : 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.2s',
-      }}>
-        {subtask.done && (
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-            <path d="M2 5.5l2 2L8 3.5" stroke={theme.bg} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </div>
-      <span style={{
-        flex: 1, fontSize: 13, color: subtask.done ? theme.done : theme.text,
-        textDecoration: subtask.done ? 'line-through' : 'none',
-        textDecorationColor: theme.done,
-      }}>{subtask.title}</span>
-      {h && (
-        <div onClick={onDelete} style={{ cursor: 'pointer', color: theme.muted, padding: '0 2px' }}>
-          <FdIcon name="x" size={12} color={theme.muted} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
    DETAIL PANEL
    ═══════════════════════════════════════════════════ */
 
@@ -657,18 +619,18 @@ function NotificationTab({ settings, onUpdate, theme }) {
 function ShortcutsTab({ theme }) {
   const isMac = navigator.platform?.includes('Mac');
   const mod = isMac ? '⌘' : 'Ctrl+';
+  // Only list shortcuts that are actually wired in focusdo-app.jsx's keydown
+  // handler. The previous "search / edit / delete / dnd-panel / up-down" lines
+  // pointed to features that don't exist yet — adding them here when there's
+  // no handler is exactly the "lying to the user" pattern we already cleaned
+  // up in the DataTab.
   const shortcuts = [
     { key: `${mod}N`, desc: '新建任务' },
     { key: `${mod}⇧N`, desc: '新建 Insight' },
-    { key: `${mod}F`, desc: '搜索' },
-    { key: 'Enter', desc: '编辑选中项' },
-    { key: 'Space', desc: '切换完成状态' },
-    { key: 'Delete', desc: '删除' },
-    { key: `${mod}\\`, desc: '打开/关闭详情面板' },
-    { key: `${mod}1~5`, desc: '切换视图' },
+    { key: `${mod}1~5`, desc: '切换视图（今天/全部/Insights/专注/统计）' },
     { key: `${mod},`, desc: '打开设置' },
-    { key: '↑ / ↓', desc: '选择项目' },
-    { key: 'Esc', desc: '关闭面板' },
+    { key: 'Esc', desc: '关闭当前面板 / 模态' },
+    { key: `${mod}↩`, desc: '在 Insight 模态中保存' },
   ];
   return (
     <div>
@@ -690,17 +652,62 @@ function ShortcutsTab({ theme }) {
 }
 
 function DataTab({ theme }) {
+  const [busy, setBusy] = React.useState(false);
+  const [lastPath, setLastPath] = React.useState(null);
+
+  const onExport = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await window.focusDo.exportData();
+      if (result.ok) {
+        setLastPath(result.path);
+      } else if ('error' in result && result.error) {
+        window.alert(`FocusDo 出错：${result.error}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <div style={{ fontSize: 16, fontWeight: 700, color: theme.text, marginBottom: 16 }}>数据</div>
-      <div style={{
-        padding: '14px 16px', borderRadius: 8,
-        border: `1px dashed ${theme.borderL}`, background: theme.hov,
-      }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: theme.text }}>导入、导出、备份功能即将上线</div>
-        <div style={{ fontSize: 12, color: theme.muted, marginTop: 4, lineHeight: 1.6 }}>
-          数据当前仅保存在本机的 SQLite 文件中（用户目录下的 focusdo.sqlite），跨设备同步与一键备份正在开发，敬请期待。
+
+      <div onClick={onExport}
+        onMouseEnter={e => !busy && (e.currentTarget.style.background = theme.hov)}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        style={{
+          padding: '12px 14px', borderRadius: 8, marginBottom: 8,
+          border: `1px solid ${theme.borderL}`,
+          cursor: busy ? 'progress' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+          transition: 'background 0.12s',
+        }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: theme.text }}>
+          {busy ? '正在导出…' : '导出为 JSON'}
         </div>
+        <div style={{ fontSize: 12, color: theme.muted, marginTop: 2 }}>
+          导出全部任务、Insights、专注记录和设置到一个 .json 文件
+        </div>
+      </div>
+
+      {lastPath && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 8,
+          background: theme.accentBg, color: theme.accent,
+          fontSize: 12, lineHeight: 1.6, marginBottom: 8, wordBreak: 'break-all',
+        }}>
+          上次导出至：{lastPath}
+        </div>
+      )}
+
+      <div style={{
+        padding: '12px 14px', borderRadius: 8,
+        border: `1px dashed ${theme.borderL}`, background: theme.hov,
+        fontSize: 12, color: theme.muted, lineHeight: 1.6,
+      }}>
+        导入与备份功能尚未上线。数据保存在用户目录下的 <code>focusdo.sqlite</code>。
       </div>
     </div>
   );
@@ -741,7 +748,7 @@ function AboutTab({ theme }) {
    ═══════════════════════════════════════════════════ */
 
 Object.assign(window, {
-  SubtaskItem, DetailPanel,
+  DetailPanel,
   SettingsModal, SettingsRow, SettingsSlider, SettingsToggle,
   AppearanceTab, TagsTab, PomodoroTab, NotificationTab, ShortcutsTab, DataTab, AboutTab,
 });

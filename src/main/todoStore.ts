@@ -9,6 +9,7 @@ import type {
   FocusDoState,
   FocusSession,
   FocusSettings,
+  InFlightFocus,
   Insight,
   Task,
   UpdateInsightInput,
@@ -16,17 +17,34 @@ import type {
   UpdateTaskInput
 } from '../shared/todo'
 
+// A focus session is considered stale (and skipped during recovery) once this much
+// wall-clock time has elapsed since it started — covers cases where the machine
+// slept overnight rather than crashed mid-pomodoro.
+const IN_FLIGHT_STALE_MS = 4 * 60 * 60 * 1000
+
 const DEFAULT_SETTINGS: FocusSettings = {
   theme: 'clear',
   focusMinutes: 25,
   shortBreakMinutes: 5,
   longBreakMinutes: 15,
+  focusScene: 'forest',
   tags: [
     { name: '工作', color: '#3b82f6' },
     { name: '开发', color: '#10b981' },
     { name: '设计', color: '#ec4899' },
     { name: '个人', color: '#8b5cf6' }
   ]
+}
+
+const VALID_FOCUS_SCENES: ReadonlyArray<FocusSettings['focusScene']> = ['forest', 'sea', 'mountain']
+
+// Legacy → current focus-scene names. Older builds wrote `'night'` for users
+// who picked it before we dropped that scene; coerce to forest on read.
+function migrateFocusScene(value: unknown): FocusSettings['focusScene'] {
+  if (typeof value === 'string' && VALID_FOCUS_SCENES.includes(value as FocusSettings['focusScene'])) {
+    return value as FocusSettings['focusScene']
+  }
+  return 'forest'
 }
 
 const now = (): string => new Date().toISOString()
@@ -69,12 +87,100 @@ export class TodoStore {
   private sqlPromise: Promise<SqlJsStatic> | null = null
   private dbPromise: Promise<Database> | null = null
   private db: Database | null = null
+  // Promise-chain mutex serializing disk writes. Without it, two concurrent
+  // mutations could each kick off a writeFile to the same path and race —
+  // libuv truncates on each open, so partial / corrupted bytes are possible.
+  // We do NOT serialize the db.run mutations themselves (sql.js is sync) —
+  // only the async persistDb work.
+  private writeChain: Promise<void> = Promise.resolve()
 
   constructor(private readonly filePath: string) {}
 
   async load(): Promise<FocusDoState> {
     await this.getDb()
+    await this.recoverInFlightFocus()
     return this.readState()
+  }
+
+  // Read-only snapshot for the export path.  Unlike load(), this does NOT
+  // trigger the in-flight focus recovery, so exporting while a pomodoro is
+  // running won't surprise-record a session.
+  async exportSnapshot(): Promise<FocusDoState> {
+    await this.getDb()
+    return this.readState()
+  }
+
+  // Records a focus snapshot to the settings table.  The renderer calls this on
+  // focus start (and on the autoStart-triggered next focus); it calls it with
+  // null on natural completion, pause, or reset.
+  async setInFlightFocus(snapshot: InFlightFocus | null): Promise<void> {
+    const db = await this.getDb()
+    if (snapshot === null) {
+      db.run(`DELETE FROM settings WHERE key = 'inFlightFocus'`)
+    } else {
+      db.run(
+        `INSERT INTO settings (key, value) VALUES ('inFlightFocus', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        [JSON.stringify(snapshot)]
+      )
+    }
+    await this.persistDb(db)
+  }
+
+  // On startup, look for an orphaned in-flight focus snapshot — if present,
+  // record it as an abandoned focus_session and clear it.  This way force-quits
+  // / OS kills mid-pomodoro don't silently swallow the user's work.
+  private async recoverInFlightFocus(): Promise<void> {
+    const db = await this.getDb()
+    const raw = this.scalar<string>(`SELECT value FROM settings WHERE key = 'inFlightFocus'`)
+    if (!raw) return
+    db.run(`DELETE FROM settings WHERE key = 'inFlightFocus'`)
+
+    let snap: InFlightFocus | null = null
+    try {
+      snap = JSON.parse(raw) as InFlightFocus
+    } catch {
+      await this.persistDb(db)
+      return
+    }
+    const startedMs = Number(snap?.startedAtMs)
+    const planned = Number(snap?.plannedDuration)
+    if (!Number.isFinite(startedMs) || !Number.isFinite(planned) || planned <= 0) {
+      await this.persistDb(db)
+      return
+    }
+    const elapsedMs = Date.now() - startedMs
+    if (elapsedMs > IN_FLIGHT_STALE_MS || elapsedMs < 0) {
+      // System probably slept or the clock jumped; don't fabricate a session.
+      await this.persistDb(db)
+      return
+    }
+    const actualDuration = Math.min(planned, Math.max(0, Math.round(elapsedMs / 1000)))
+    if (actualDuration < 1) {
+      await this.persistDb(db)
+      return
+    }
+    let taskId: string | null = snap.taskId ?? null
+    if (taskId && !this.getTask(taskId)) taskId = null
+    db.run(
+      `INSERT INTO focus_sessions
+        (id, task_id, started_at, ended_at, planned_duration, actual_duration, status, type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        crypto.randomUUID(),
+        taskId,
+        snap.startedAt,
+        new Date().toISOString(),
+        planned,
+        actualDuration,
+        'abandoned',
+        'focus'
+      ]
+    )
+    console.log(
+      `[FocusDo] recovered in-flight focus: taskId=${taskId} elapsed=${actualDuration}s of ${planned}s`
+    )
+    await this.persistDb(db)
   }
 
   async createTask(input: CreateTaskInput): Promise<FocusDoState> {
@@ -108,7 +214,10 @@ export class TodoStore {
     const planDate =
       input.planDate === undefined ? current.planDate : validatePlanDate(input.planDate)
     let tag: Task['tag'] = current.tag
-    if (input.tag !== undefined) {
+    if (input.tag !== undefined && input.tag !== current.tag) {
+      // Skip validation when the tag isn't actually changing — that lets legacy
+      // tasks (whose tag was renamed away without cascading) still accept other
+      // field updates without false-rejecting the no-op tag pass-through.
       if (input.tag === null) {
         tag = null
       } else {
@@ -149,6 +258,16 @@ export class TodoStore {
     db.run('DELETE FROM tasks WHERE id = ?', [id])
     db.run('UPDATE insights SET linked_task_id = NULL WHERE linked_task_id = ?', [id])
     db.run('DELETE FROM focus_sessions WHERE task_id = ?', [id])
+    return this.persistAndRead()
+  }
+
+  // Atomic `pomodoroCount += 1` for a given task. Avoids the read-modify-write
+  // race in the renderer's setInterval where two near-simultaneous completions
+  // could each read N and both write N+1, losing an increment. The whole op is
+  // a single sqlite UPDATE inside writeChain so concurrent calls just serialize.
+  async incrementPomodoroCount(id: string): Promise<FocusDoState> {
+    const db = await this.getDb()
+    db.run('UPDATE tasks SET pomodoro_count = pomodoro_count + 1 WHERE id = ?', [id])
     return this.persistAndRead()
   }
 
@@ -217,7 +336,31 @@ export class TodoStore {
 
   async updateSettings(input: UpdateSettingsInput): Promise<FocusDoState> {
     const current = await this.readSettings()
-    await this.writeSettings({ ...current, ...input })
+    const next = { ...current, ...input }
+
+    // Detect positional tag renames (TagsTab edits a single name in place while
+    // preserving array order + color, so the rename can be matched at index N
+    // when color matches and only the name differs). Cascade the new name onto
+    // tasks / insights so they don't get orphaned with a stale tag string.
+    if (input.tags && current.tags) {
+      const db = await this.getDb()
+      const len = Math.min(current.tags.length, input.tags.length)
+      for (let i = 0; i < len; i++) {
+        const before = current.tags[i]
+        const after = input.tags[i]
+        if (
+          before &&
+          after &&
+          before.name !== after.name &&
+          before.color === after.color
+        ) {
+          db.run('UPDATE tasks SET tag = ? WHERE tag = ?', [after.name, before.name])
+          db.run('UPDATE insights SET tag = ? WHERE tag = ?', [after.name, before.name])
+        }
+      }
+    }
+
+    await this.writeSettings(next)
     return this.persistAndRead()
   }
 
@@ -269,9 +412,6 @@ export class TodoStore {
 
     this.db = db
     this.migrate(db)
-    if (this.countRows(db, 'tasks') === 0 && this.countRows(db, 'insights') === 0) {
-      this.seed(db)
-    }
     await this.persistDb(db)
     return db
   }
@@ -342,46 +482,6 @@ export class TodoStore {
     }
   }
 
-  private seed(db: Database): void {
-    seedTasks().forEach((task) => {
-      db.run(
-        `INSERT INTO tasks
-          (id, title, notes, tag, priority, plan_date, completed, completed_at, created_at, pomodoro_count, archived, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          task.id,
-          task.title,
-          task.notes,
-          task.tag,
-          task.priority,
-          task.planDate,
-          task.completed ? 1 : 0,
-          task.completedAt,
-          task.createdAt,
-          task.pomodoroCount,
-          task.archived ? 1 : 0,
-          task.sortOrder
-        ]
-      )
-    })
-
-    seedInsights().forEach((insight) => {
-      db.run(
-        `INSERT INTO insights (id, title, content, tag, linked_task_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          insight.id,
-          insight.title,
-          insight.content,
-          insight.tag,
-          insight.linkedTaskId,
-          insight.createdAt,
-          insight.updatedAt
-        ]
-      )
-    })
-  }
-
   private async readState(): Promise<FocusDoState> {
     await this.getDb()
     return {
@@ -427,7 +527,11 @@ export class TodoStore {
     if (!raw) return DEFAULT_SETTINGS
 
     try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+      const merged = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+      // Coerce focusScene through whitelist so old 'night' values roll forward
+      // to the default without throwing on every read.
+      merged.focusScene = migrateFocusScene(merged.focusScene)
+      return merged
     } catch {
       return DEFAULT_SETTINGS
     }
@@ -471,15 +575,30 @@ export class TodoStore {
   }
 
   private async persistDb(db: Database): Promise<void> {
-    try {
-      await mkdir(dirname(this.filePath), { recursive: true })
-      await writeFile(this.filePath, Buffer.from(db.export()))
-    } catch (error) {
-      console.error('[FocusDo] persistDb failed:', error)
-      throw new Error(
-        `保存失败：${error instanceof Error ? error.message : String(error)}`
-      )
+    const work = async (): Promise<void> => {
+      try {
+        // Snapshot the in-memory db state at write time. Any mutation completed
+        // before this point is included in the snapshot.
+        const buffer = Buffer.from(db.export())
+        await mkdir(dirname(this.filePath), { recursive: true })
+        await writeFile(this.filePath, buffer)
+      } catch (error) {
+        console.error('[FocusDo] persistDb failed:', error)
+        throw new Error(
+          `保存失败：${error instanceof Error ? error.message : String(error)}`
+        )
+      }
     }
+    // Chain onto the existing queue regardless of whether the previous write
+    // succeeded — we don't want one failed write to block all subsequent ones.
+    const next = this.writeChain.then(work, work)
+    // The chain swallows so a single failure can't poison the queue. Callers
+    // still get their original rejection through `next`. Logging here means
+    // background writes that nothing awaits are still observable in stdout.
+    this.writeChain = next.catch((error) => {
+      console.warn('[FocusDo] write queue saw a failure (already surfaced to caller):', error)
+    })
+    return next
   }
 
   private countRows(
@@ -560,64 +679,6 @@ function rowToFocusSession(row: unknown[]): FocusSession {
     status: (row[6] as FocusSession['status']) ?? 'completed',
     type: (row[7] as FocusSession['type']) ?? 'focus'
   }
-}
-
-function seedTasks(): Task[] {
-  return [
-    createSeedTask('回复客户邮件', '工作', 'important', 'today'),
-    createSeedTask('代码审查 - PR #247', '开发', 'important', 'today', '注意边界情况的处理', 1),
-    createSeedTask('准备周五演示文稿', '工作', 'normal', 'thisWeek'),
-    createSeedTask('更新设计文档 v2', '设计', 'normal', 'today', '', 2),
-    createSeedTask('阅读《深度工作》第 3 章', '个人', 'normal', null)
-  ]
-}
-
-function createSeedTask(
-  title: string,
-  tag: Task['tag'],
-  priority: Task['priority'],
-  planDate: string | null,
-  notes = '',
-  pomodoroCount = 0
-): Task {
-  return {
-    id: crypto.randomUUID(),
-    title,
-    notes,
-    tag,
-    priority,
-    planDate,
-    completed: false,
-    completedAt: null,
-    createdAt: now(),
-    pomodoroCount,
-    archived: false,
-    sortOrder: Date.now() + Math.floor(Math.random() * 1000)
-  }
-}
-
-function seedInsights(): Insight[] {
-  const timestamp = now()
-  return [
-    {
-      id: crypto.randomUUID(),
-      title: 'Electron 主进程通信优化',
-      content: '发现 IPC 同步调用会阻塞渲染，改用 invoke 异步方式后流畅度显著提升。',
-      tag: '开发',
-      linkedTaskId: null,
-      createdAt: timestamp,
-      updatedAt: timestamp
-    },
-    {
-      id: crypto.randomUUID(),
-      title: null,
-      content: '开场先 align 议程，中途有人跑题时用「这个我们会后单独聊」收回。会议效率提升明显。',
-      tag: '工作',
-      linkedTaskId: null,
-      createdAt: timestamp,
-      updatedAt: timestamp
-    }
-  ]
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

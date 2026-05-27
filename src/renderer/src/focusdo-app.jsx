@@ -1,3 +1,6 @@
+import emptyStatsUrl from './assets/empty-stats.webp';
+import iconAppUrl from './assets/icon-app-64.png';
+
 const DEFAULT_SETTINGS = {
   themeKey: 'clarity',
   focusMin: 25,
@@ -9,6 +12,7 @@ const DEFAULT_SETTINGS = {
   breakNotify: true,
   dnd: false,
   followSystem: false,
+  focusScene: 'forest',
   tags: DEFAULT_TAGS,
 };
 
@@ -22,27 +26,33 @@ function normalizePlanDate(planDate) {
 }
 
 function toUiTask(task) {
+  // Backend Task has `completed`; UI components use `done`. Map directly — no
+  // `?? false` because the type guarantees boolean.
   return {
     ...task,
-    done: task.done ?? task.completed ?? false,
+    done: task.completed,
     planDate: normalizePlanDate(task.planDate),
-    pomodoroCount: task.pomodoroCount ?? 0,
   };
 }
 
 function toUiState(state) {
+  // `state` comes from the typed IPC contract (FocusDoState). tasks/insights/
+  // focusSessions/settings are always present, so we trust them directly.
+  // The settings block keeps legacy-key fallbacks (focusMinutes vs focusMin,
+  // theme vs themeKey) because the on-disk settings JSON may carry older keys.
+  const s = state.settings;
   return {
-    tasks: (state.tasks || []).map(toUiTask),
-    insights: state.insights || [],
-    focusSessions: state.focusSessions || [],
+    tasks: state.tasks.map(toUiTask),
+    insights: state.insights,
+    focusSessions: state.focusSessions,
     settings: {
       ...DEFAULT_SETTINGS,
-      ...(state.settings || {}),
-      themeKey: state.settings?.themeKey || themeToThemeKey(state.settings?.theme),
-      focusMin: state.settings?.focusMin || state.settings?.focusMinutes || 25,
-      shortBreakMin: state.settings?.shortBreakMin || state.settings?.shortBreakMinutes || 5,
-      longBreakMin: state.settings?.longBreakMin || state.settings?.longBreakMinutes || 15,
-      tags: state.settings?.tags || DEFAULT_TAGS,
+      ...s,
+      themeKey: s.themeKey || themeToThemeKey(s.theme),
+      focusMin: s.focusMin || s.focusMinutes || 25,
+      shortBreakMin: s.shortBreakMin || s.shortBreakMinutes || 5,
+      longBreakMin: s.longBreakMin || s.longBreakMinutes || 15,
+      tags: s.tags || DEFAULT_TAGS,
     },
   };
 }
@@ -85,9 +95,11 @@ function statGroupByDate(items, getDate, getValue = () => 1) {
 }
 
 function statStreak(focusSessions) {
+  // Attribute by endedAt so a session that crosses midnight counts toward the
+  // day the user actually finished focusing, not the day they started.
   const days = new Set((focusSessions || [])
     .filter(s => s.type === 'focus' && s.status === 'completed')
-    .map(s => statDateKey(s.startedAt))
+    .map(s => statDateKey(s.endedAt))
     .filter(Boolean));
   let count = 0;
   let cursor = statStartOfDay(new Date());
@@ -120,7 +132,7 @@ function RealHeatmap({ theme, activeHeatTab, tasks, insights, focusSessions }) {
   const valueMaps = React.useMemo(() => ({
     focus: statGroupByDate(
       focusSessions.filter(s => s.type === 'focus' && s.status === 'completed'),
-      s => s.startedAt,
+      s => s.endedAt,
       s => statMinutes(s.actualDuration)
     ),
     tasks: statGroupByDate(statCompletedTasks(tasks), t => t.completedAt),
@@ -240,6 +252,18 @@ function RealHeatmap({ theme, activeHeatTab, tasks, insights, focusSessions }) {
 
 function RealStatsView({ tasks = [], insights = [], focusSessions = [], theme }) {
   const [heatTab, setHeatTab] = React.useState('focus');
+
+  // Full empty state: no tasks, no insights, no recorded sessions yet.
+  // Render the illustration instead of the all-zero dashboard.
+  // (Hook order: useState above must stay first; we early-return below it.)
+  if (tasks.length === 0 && insights.length === 0 && focusSessions.length === 0) {
+    return (
+      <EmptyState src={emptyStatsUrl}
+        title="还没有数据"
+        subtitle="完成第一个番茄钟开启统计"
+        theme={theme} />
+    );
+  }
   const today = statDateKey(new Date());
   const weekStart = statAddDays(statStartOfDay(new Date()), -((new Date().getDay() + 6) % 7));
   const weekDays = Array.from({ length: 7 }, (_, i) => statAddDays(weekStart, i));
@@ -247,7 +271,7 @@ function RealStatsView({ tasks = [], insights = [], focusSessions = [], theme })
   const completed = statCompletedTasks(tasks);
   const completedThisWeek = completed.filter(t => weekKeys.has(statDateKey(t.completedAt))).length;
   const focusCompleted = focusSessions.filter(s => s.type === 'focus' && s.status === 'completed');
-  const focusTodayMin = statMinutes(focusCompleted.filter(s => statDateKey(s.startedAt) === today).reduce((sum, s) => sum + (s.actualDuration || 0), 0));
+  const focusTodayMin = statMinutes(focusCompleted.filter(s => statDateKey(s.endedAt) === today).reduce((sum, s) => sum + (s.actualDuration || 0), 0));
   const totalPomos = focusCompleted.length;
   const streak = statStreak(focusSessions);
   const monthInsights = insights.filter(i => {
@@ -255,7 +279,7 @@ function RealStatsView({ tasks = [], insights = [], focusSessions = [], theme })
     const now = new Date();
     return !Number.isNaN(d.getTime()) && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
-  const focusByDay = statGroupByDate(focusCompleted, s => s.startedAt, s => statMinutes(s.actualDuration));
+  const focusByDay = statGroupByDate(focusCompleted, s => s.endedAt, s => statMinutes(s.actualDuration));
   const weekData = weekDays.map(d => {
     const key = statDateKey(d);
     return { day: ['日','一','二','三','四','五','六'][d.getDay()], val: focusByDay[key] || 0 };
@@ -426,9 +450,16 @@ function Sidebar({ activeTab, onTabChange, counts, pomo, onOpenSettings, theme }
       borderRight: `1px solid ${theme.borderL}`, userSelect: 'none', padding: '20px 8px 12px',
     }}>
       <div style={{
-        fontSize: 18, fontWeight: 700, color: theme.text, padding: '0 10px 22px',
-        letterSpacing: '-0.03em',
-      }}>FocusDo</div>
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '0 10px 22px',
+      }}>
+        <img src={iconAppUrl} width={24} height={24} alt=""
+          style={{ borderRadius: 5, flexShrink: 0 }} />
+        <span style={{
+          fontSize: 18, fontWeight: 700, color: theme.text,
+          letterSpacing: '-0.03em',
+        }}>FocusDo</span>
+      </div>
 
       <div style={{
         fontSize: 11, fontWeight: 600, color: theme.muted,
@@ -472,6 +503,9 @@ function App() {
   const [loading, setLoading] = React.useState(true);
   const [systemThemeKey, setSystemThemeKey] = React.useState(getSystemThemeKey);
   const [insightModal, setInsightModal] = React.useState(null);
+  // Bumped on Cmd/Ctrl+N — the visible TaskListView's AddTaskInput watches this
+  // and focuses its <input> when the tick changes.
+  const [addTaskFocusTick, setAddTaskFocusTick] = React.useState(0);
 
   React.useEffect(() => {
     window.focusDo.load().then((state) => {
@@ -531,6 +565,13 @@ function App() {
   });
   const timerRef = React.useRef(null);
   const focusStartedAtRef = React.useRef(null);
+  // Wall-clock anchor for the currently running phase (focus / shortBreak / longBreak).
+  // The setInterval below decides timeLeft from (Date.now() - phaseStartMsRef.current)
+  // rather than decrementing by 1 each tick — that way a backgrounded window
+  // whose interval gets throttled to 1 Hz / 30 s still ends up displaying the
+  // correct remaining time the moment it fires.
+  const phaseStartMsRef = React.useRef(null);
+  const phaseDurationRef = React.useRef(focusSec);
   const settingsRef = React.useRef(settings);
   React.useEffect(() => { settingsRef.current = settings; }, [settings]);
   const tasksRef = React.useRef(tasks);
@@ -540,9 +581,8 @@ function App() {
     const s = settingsRef.current;
     if (s.dnd) return;
     if (!s[flag]) return;
-    if (typeof window.focusDo.notify === 'function') {
-      window.focusDo.notify(payload).catch(() => {});
-    }
+    // Errors propagate to the global unhandledrejection listener; no local swallow.
+    window.focusDo.notify(payload);
   }, []);
 
   React.useEffect(() => {
@@ -558,91 +598,135 @@ function App() {
     if (running && !pomo.showCompletion) {
       timerRef.current = setInterval(() => {
         setPomo(prev => {
-          if (prev.timeLeft <= 1) {
-            if (prev.phase === 'focus') {
-              const newConsec = prev.consecutiveFocus + 1;
-              setPomosToday(c => c + 1);
-              window.focusDo.recordFocusSession({
-                taskId: prev.taskId || null,
-                startedAt: focusStartedAtRef.current || new Date(Date.now() - prev.totalTime * 1000).toISOString(),
-                endedAt: new Date().toISOString(),
-                plannedDuration: prev.totalTime,
-                actualDuration: Math.min(prev.totalTime, Math.max(0, prev.totalTime - prev.timeLeft + 1)),
-                status: 'completed',
-                type: 'focus',
-              }).then(applyState);
-              if (prev.taskId) {
-                const task = tasksRef.current.find(t => t.id === prev.taskId);
-                if (task) updateTask(prev.taskId, { pomodoroCount: (task.pomodoroCount || 0) + 1 });
-              }
-              focusStartedAtRef.current = null;
-              fireNotify('pomodoroNotify', { title: '番茄完成', body: '专注时段已结束，可以休息一下。' });
-              return { ...prev, timeLeft: 0, showCompletion: true, consecutiveFocus: newConsec };
-            }
-            fireNotify('breakNotify', { title: '休息结束', body: '准备好开始下一个番茄了吗？' });
-            if (settingsRef.current.autoStart) {
-              focusStartedAtRef.current = new Date().toISOString();
-              return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'focus', showCompletion: false };
-            }
-            return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' };
+          const startMs = phaseStartMsRef.current;
+          const duration = phaseDurationRef.current;
+          if (!startMs || !duration) return prev;
+          const elapsedSec = (Date.now() - startMs) / 1000;
+          const newTimeLeft = Math.max(0, Math.ceil(duration - elapsedSec));
+          if (newTimeLeft > 0) {
+            return prev.timeLeft === newTimeLeft ? prev : { ...prev, timeLeft: newTimeLeft };
           }
-          return { ...prev, timeLeft: prev.timeLeft - 1 };
+          // newTimeLeft === 0 → phase transition
+          if (prev.phase === 'focus') {
+            const newConsec = prev.consecutiveFocus + 1;
+            const actualDuration = Math.min(prev.totalTime, Math.max(0, Math.round(elapsedSec)));
+            setPomosToday(c => c + 1);
+            window.focusDo.recordFocusSession({
+              taskId: prev.taskId || null,
+              startedAt: focusStartedAtRef.current || new Date(startMs).toISOString(),
+              endedAt: new Date().toISOString(),
+              plannedDuration: prev.totalTime,
+              actualDuration,
+              status: 'completed',
+              type: 'focus',
+            }).then(applyState);
+            if (prev.taskId) {
+              // Atomic +1 on the backend — avoids the read-modify-write race
+              // where two near-simultaneous completions could both write N+1.
+              window.focusDo.incrementPomodoroCount(prev.taskId).then(applyState);
+            }
+            focusStartedAtRef.current = null;
+            phaseStartMsRef.current = null;
+            writeInFlightFocus(null);
+            fireNotify('pomodoroNotify', { title: '番茄完成', body: '专注时段已结束，可以休息一下。' });
+            return { ...prev, timeLeft: 0, showCompletion: true, consecutiveFocus: newConsec };
+          }
+          // break phase ended
+          fireNotify('breakNotify', { title: '休息结束', body: '准备好开始下一个番茄了吗？' });
+          if (settingsRef.current.autoStart) {
+            const nextStartMs = Date.now();
+            focusStartedAtRef.current = new Date(nextStartMs).toISOString();
+            phaseStartMsRef.current = nextStartMs;
+            phaseDurationRef.current = focusSec;
+            writeInFlightFocus({
+              taskId: prev.taskId || null,
+              startedAt: focusStartedAtRef.current,
+              startedAtMs: nextStartMs,
+              plannedDuration: focusSec,
+            });
+            return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'focus', showCompletion: false };
+          }
+          phaseStartMsRef.current = null;
+          return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' };
         });
       }, 1000);
     }
     return () => clearInterval(timerRef.current);
   }, [pomo.phase, pomo.showCompletion, focusSec, fireNotify]);
 
+  const computeElapsedSec = () => {
+    const startMs = phaseStartMsRef.current;
+    if (!startMs) return 0;
+    return Math.max(0, Math.round((Date.now() - startMs) / 1000));
+  };
+
+  const writeInFlightFocus = (snap) => {
+    // Fire-and-forget. Failures bubble to the global unhandledrejection alert.
+    window.focusDo.setInFlightFocus(snap);
+  };
+
   const startFocus = (taskId) => {
-    focusStartedAtRef.current = new Date().toISOString();
+    const nowMs = Date.now();
+    const effectiveTaskId = taskId ?? pomo.taskId ?? null;
+    focusStartedAtRef.current = new Date(nowMs).toISOString();
+    phaseStartMsRef.current = nowMs;
+    phaseDurationRef.current = focusSec;
     setPomo(p => ({
       timeLeft: focusSec, totalTime: focusSec,
       phase: 'focus', taskId: taskId ?? p.taskId,
       consecutiveFocus: p.consecutiveFocus, showCompletion: false,
     }));
+    writeInFlightFocus({
+      taskId: effectiveTaskId,
+      startedAt: focusStartedAtRef.current,
+      startedAtMs: nowMs,
+      plannedDuration: focusSec,
+    });
     setActiveTab('focus');
   };
+  const recordPartialFocus = () => {
+    if (!focusStartedAtRef.current || pomo.phase !== 'focus') return;
+    const elapsed = Math.min(pomo.totalTime, computeElapsedSec());
+    window.focusDo.recordFocusSession({
+      taskId: pomo.taskId || null,
+      startedAt: focusStartedAtRef.current,
+      endedAt: new Date().toISOString(),
+      plannedDuration: pomo.totalTime,
+      actualDuration: elapsed,
+      status: 'abandoned',
+      type: 'focus',
+    }).then(applyState);
+  };
   const pauseTimer = () => {
-    if (focusStartedAtRef.current && pomo.phase === 'focus') {
-      window.focusDo.recordFocusSession({
-        taskId: pomo.taskId || null,
-        startedAt: focusStartedAtRef.current,
-        endedAt: new Date().toISOString(),
-        plannedDuration: pomo.totalTime,
-        actualDuration: Math.max(0, pomo.totalTime - pomo.timeLeft),
-        status: 'abandoned',
-        type: 'focus',
-      }).then(applyState);
-    }
+    recordPartialFocus();
+    writeInFlightFocus(null);
     focusStartedAtRef.current = null;
+    phaseStartMsRef.current = null;
     window.focusDo.updateTray({ running: false });
     setPomo(p => ({ ...p, phase: 'idle' }));
   };
   const resetTimer = () => {
-    if (focusStartedAtRef.current && pomo.phase === 'focus') {
-      window.focusDo.recordFocusSession({
-        taskId: pomo.taskId || null,
-        startedAt: focusStartedAtRef.current,
-        endedAt: new Date().toISOString(),
-        plannedDuration: pomo.totalTime,
-        actualDuration: Math.max(0, pomo.totalTime - pomo.timeLeft),
-        status: 'abandoned',
-        type: 'focus',
-      }).then(applyState);
-    }
+    recordPartialFocus();
+    writeInFlightFocus(null);
     focusStartedAtRef.current = null;
+    phaseStartMsRef.current = null;
     window.focusDo.updateTray({ running: false });
     setPomo({
       timeLeft: focusSec, totalTime: focusSec,
       phase: 'idle', taskId: null, consecutiveFocus: 0, showCompletion: false,
     });
   };
-  const skipBreak = () => setPomo(p => ({ ...p, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' }));
+  const skipBreak = () => {
+    phaseStartMsRef.current = null;
+    setPomo(p => ({ ...p, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' }));
+  };
 
   const handleCompleteTask = (markDone) => {
     if (markDone && pomo.taskId) updateTask(pomo.taskId, { completed: true });
     const isLong = pomo.consecutiveFocus > 0 && pomo.consecutiveFocus % 4 === 0;
     const breakSec = isLong ? longSec : shortSec;
+    phaseStartMsRef.current = Date.now();
+    phaseDurationRef.current = breakSec;
     setPomo(p => ({
       ...p, timeLeft: breakSec, totalTime: breakSec,
       phase: isLong ? 'longBreak' : 'shortBreak', showCompletion: false,
@@ -729,7 +813,8 @@ function App() {
   };
 
   const nonArchived = tasks.filter(t => !t.archived);
-  const todayTasks = nonArchived.filter(t => t.planDate === 'today' || t.planDate === todayKey());
+  // toUiTask 已经把 ISO 今天日期归一为 'today'，所以这里只需比对字符串。
+  const todayTasks = nonArchived.filter(t => t.planDate === 'today');
   const allTasks = nonArchived;
   const archivedTasks = tasks.filter(t => t.archived);
   const incompleteTasks = nonArchived.filter(t => !t.done);
@@ -753,8 +838,14 @@ function App() {
         if (selectedInsightId) { setSelectedInsightId(null); return; }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); setShowSettings(true); }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
-        e.preventDefault(); openInsightModal(null);
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+        e.preventDefault(); openInsightModal(null); return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+        e.preventDefault();
+        if (activeTab !== 'today' && activeTab !== 'all') setActiveTab('today');
+        setAddTaskFocusTick(n => n + 1);
+        return;
       }
       const tabMap = { '1': 'today', '2': 'all', '3': 'insights', '4': 'focus', '5': 'stats' };
       if ((e.metaKey || e.ctrlKey) && tabMap[e.key]) { e.preventDefault(); setActiveTab(tabMap[e.key]); }
@@ -794,20 +885,37 @@ function App() {
         {activeTab === 'today' && (
           <TaskListView title="今天" subtitle={dateStr} tasks={todayTasks}
             onToggle={toggleTask} onClick={id => setSelectedTaskId(id === selectedTaskId ? null : id)}
-            onStartFocus={startFocus} onAdd={addTask} selectedTaskId={selectedTaskId} theme={theme} tagColors={tagColors} />
+            onStartFocus={startFocus} onAdd={addTask} addFocusTick={addTaskFocusTick}
+            selectedTaskId={selectedTaskId} theme={theme} tagColors={tagColors} />
         )}
         {activeTab === 'all' && (
           <TaskListView title="全部任务" subtitle={`${counts.all} 个待办`} tasks={allTasks}
             onToggle={toggleTask} onClick={id => setSelectedTaskId(id === selectedTaskId ? null : id)}
-            onStartFocus={startFocus} onAdd={addTask} selectedTaskId={selectedTaskId} theme={theme} tagColors={tagColors} />
+            onStartFocus={startFocus} onAdd={addTask} addFocusTick={addTaskFocusTick}
+            selectedTaskId={selectedTaskId} theme={theme} tagColors={tagColors} />
         )}
         {activeTab === 'focus' && (
           <FocusView pomo={pomo} tasks={tasks}
             onStart={() => startFocus(pomo.taskId)}
             onPause={pauseTimer} onReset={resetTimer} onSkipBreak={skipBreak}
-            onChangeTask={id => setPomo(p => ({ ...p, taskId: id }))}
+            onChangeTask={id => {
+              setPomo(p => ({ ...p, taskId: id }));
+              // Keep the in-flight snapshot in sync with the visible task link
+              // so a crash recovery doesn't attribute the session to the
+              // task the user just explicitly unlinked.
+              if (focusStartedAtRef.current && phaseStartMsRef.current) {
+                writeInFlightFocus({
+                  taskId: id,
+                  startedAt: focusStartedAtRef.current,
+                  startedAtMs: phaseStartMsRef.current,
+                  plannedDuration: phaseDurationRef.current,
+                });
+              }
+            }}
             onCompleteTask={handleCompleteTask} onDismissComplete={handleDismissComplete}
             onSaveQuickInsight={saveQuickInsight}
+            focusScene={settings.focusScene || 'forest'}
+            onChangeFocusScene={(scene) => updateSettings({ focusScene: scene })}
             pomosToday={pomosToday} totalFocusMin={totalFocusMin} theme={theme} />
         )}
         {activeTab === 'insights' && !selectedInsightId && (

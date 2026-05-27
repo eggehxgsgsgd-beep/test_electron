@@ -1,4 +1,25 @@
 // fd-ui.jsx — FocusDo V2: Themes, Icons, Task Components, Views
+import lottie from 'lottie-web';
+import sceneForestUrl from './assets/scene-forest.webp';
+import emptyTodayUrl from './assets/empty-today.webp';
+import tickLottieData from './assets/lottie/tick.json';
+
+// Confetti is ~600 KB — lazy-load only when the first pomodoro finishes.
+let confettiLottieDataPromise = null;
+const loadConfettiData = () => {
+  if (!confettiLottieDataPromise) {
+    confettiLottieDataPromise = import('./assets/lottie/confetti.json').then((m) => m.default);
+  }
+  return confettiLottieDataPromise;
+};
+
+// Other scenes are code-split: only `forest` is in the main bundle. Switching
+// to `sea` / `mountain` fetches its WebP on demand (a few-tens-of-KB chunk).
+const sceneLoaders = {
+  forest: () => Promise.resolve(sceneForestUrl),
+  sea: () => import('./assets/scene-sea.webp').then(m => m.default),
+  mountain: () => import('./assets/scene-mountain.webp').then(m => m.default),
+};
 
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
@@ -98,6 +119,75 @@ function buildTagColors(tags) {
    SVG ICONS (compact)
    ═══════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════
+   LOTTIE (one-shot animation player)
+   ═══════════════════════════════════════════════════ */
+
+function LottieView({ data, loop = false, autoplay = true, onComplete, style }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !data) return;
+    const anim = lottie.loadAnimation({
+      container: containerRef.current,
+      renderer: 'svg',
+      loop,
+      autoplay,
+      animationData: data,
+    });
+    if (onComplete) anim.addEventListener('complete', onComplete);
+    return () => anim.destroy();
+  }, [data, loop, autoplay]);
+
+  return <div ref={containerRef} style={{ pointerEvents: 'none', ...style }} />;
+}
+
+function ConfettiOverlay() {
+  // Lazy-loads the heavy confetti JSON the first time it's needed. While the
+  // fetch is in flight the overlay renders nothing — confetti is purely
+  // decorative, so a brief delay before it appears is acceptable.
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadConfettiData().then((d) => { if (!cancelled) setData(d); });
+    return () => { cancelled = true; };
+  }, []);
+  if (!data) return null;
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none',
+      zIndex: 25,  // above the dim overlay (20) so confetti renders in front
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <LottieView data={data} autoplay loop={false}
+        style={{ width: 480, height: 480 }} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   EMPTY STATE (shared illustration card)
+   ═══════════════════════════════════════════════════ */
+
+function EmptyState({ src, title, subtitle, theme }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', height: '100%', minHeight: 280,
+      padding: '32px 20px', gap: 4, textAlign: 'center',
+    }}>
+      <img src={src} width={200} height={200} alt=""
+        style={{ objectFit: 'contain', userSelect: 'none' }} />
+      <div style={{ fontSize: 15, fontWeight: 600, color: theme.text, marginTop: 12 }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 13, color: theme.muted, marginTop: 2 }}>
+        {subtitle}
+      </div>
+    </div>
+  );
+}
+
 function FdIcon({ name, size = 16, color = 'currentColor', sw = 1.5 }) {
   const p = { fill: 'none', stroke: color, strokeWidth: sw, strokeLinecap: 'round', strokeLinejoin: 'round' };
   const box = '0 0 24 24';
@@ -130,20 +220,42 @@ function FdIcon({ name, size = 16, color = 'currentColor', sw = 1.5 }) {
 
 function TaskCheckbox({ checked, onChange, theme }) {
   const [h, setH] = useState(false);
+  // `playing` is the one-shot tick animation right after the user toggles ✓.
+  // It auto-clears when the lottie's `complete` event fires (~400 ms).
+  const [playing, setPlaying] = useState(false);
+  const prevCheckedRef = useRef(checked);
+
+  useEffect(() => {
+    // Only animate when transitioning unchecked → checked. If the prop is
+    // already true on first render (page reload of a completed task) we
+    // skip the animation to avoid replaying historical state.
+    if (!prevCheckedRef.current && checked) setPlaying(true);
+    prevCheckedRef.current = checked;
+  }, [checked]);
+
   return (
     <div onClick={e => { e.stopPropagation(); onChange(); }}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       style={{
+        position: 'relative',
         width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
         border: `1.5px solid ${checked ? theme.done : (h ? theme.accent : theme.border)}`,
         background: checked ? theme.done : (h ? theme.accentBg : 'transparent'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'pointer', transition: 'all 0.2s',
       }}>
-      {checked && (
+      {checked && !playing && (
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
           <path d="M2 5.5l2 2L8 3.5" stroke={theme.bg} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+      )}
+      {playing && (
+        <LottieView data={tickLottieData} autoplay loop={false}
+          onComplete={() => setPlaying(false)}
+          style={{
+            position: 'absolute', inset: -8,  // overshoot for the burst animation
+            width: 'calc(100% + 16px)', height: 'calc(100% + 16px)',
+          }} />
       )}
     </div>
   );
@@ -155,8 +267,6 @@ function TaskCheckbox({ checked, onChange, theme }) {
 
 function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, tagColors }) {
   const [h, setH] = useState(false);
-  const subDone = (task.subtasks || []).filter(s => s.done).length;
-  const subTotal = (task.subtasks || []).length;
   const planLabel = formatPlanDate(task.planDate);
   const tc = tagColors || theme.tags;
 
@@ -183,7 +293,7 @@ function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, ta
           transition: 'color 0.25s',
         }}>{task.title}</div>
 
-        {!task.done && (task.tag || planLabel || subTotal > 0 || task.pomodoroCount > 0) && (
+        {!task.done && (task.tag || planLabel || task.pomodoroCount > 0) && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, marginTop: 3,
             fontSize: 12, color: theme.sub, flexWrap: 'wrap',
@@ -194,7 +304,6 @@ function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, ta
               </span>
             )}
             {planLabel && <span>{planLabel}</span>}
-            {subTotal > 0 && <span style={{ color: theme.muted }}>{subDone}/{subTotal}</span>}
             {task.pomodoroCount > 0 && (
               <span style={{ color: theme.muted }}>
                 <span style={{ opacity: 0.7 }}>●</span> ×{task.pomodoroCount}
@@ -231,11 +340,17 @@ function TaskItem({ task, onToggle, onClick, onStartFocus, isSelected, theme, ta
    ADD TASK INPUT
    ═══════════════════════════════════════════════════ */
 
-function AddTaskInput({ onAdd, theme }) {
+function AddTaskInput({ onAdd, theme, focusTick }) {
   const [val, setVal] = useState('');
   const [focused, setFocused] = useState(false);
   const ref = useRef(null);
   const submit = () => { if (val.trim()) { onAdd(val.trim()); setVal(''); } };
+
+  // App bumps focusTick on Cmd+N — focus the input on each tick (>0 so the
+  // initial mount doesn't auto-focus unexpectedly).
+  useEffect(() => {
+    if (focusTick && ref.current) ref.current.focus();
+  }, [focusTick]);
 
   return (
     <div style={{
@@ -263,7 +378,7 @@ function AddTaskInput({ onAdd, theme }) {
    TASK LIST VIEW (Today / All)
    ═══════════════════════════════════════════════════ */
 
-function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus, onAdd, selectedTaskId, theme, tagColors }) {
+function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus, onAdd, addFocusTick, selectedTaskId, theme, tagColors }) {
   const incomplete = useMemo(() => {
     const imp = tasks.filter(t => !t.done && t.priority === 'important');
     const norm = tasks.filter(t => !t.done && t.priority !== 'important');
@@ -281,20 +396,14 @@ function TaskListView({ title, subtitle, tasks, onToggle, onClick, onStartFocus,
         {subtitle && <div style={{ fontSize: 13, color: theme.sub, marginTop: 4 }}>{subtitle}</div>}
       </div>
 
-      <AddTaskInput onAdd={onAdd} theme={theme} />
+      <AddTaskInput onAdd={onAdd} theme={theme} focusTick={addFocusTick} />
 
       <div style={{ flex: 1, overflow: 'auto', scrollbarWidth: 'none' }}>
         {incomplete.length === 0 && completed.length === 0 && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: 200, color: theme.muted, gap: 8,
-          }}>
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-              <circle cx="20" cy="20" r="16" stroke={theme.borderL} strokeWidth="2" strokeDasharray="4 4" />
-              <path d="M14 21l4 4 8-8" stroke={theme.muted} strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <span style={{ fontSize: 14 }}>暂无任务</span>
-          </div>
+          <EmptyState src={emptyTodayUrl}
+            title="今天还没有任务"
+            subtitle="开始规划你的一天"
+            theme={theme} />
         )}
 
         {incomplete.map(t => (
@@ -482,8 +591,109 @@ function CompletionWithInsight({ taskId, taskTag, onComplete, onSaveInsight, the
    FOCUS VIEW (Pomodoro)
    ═══════════════════════════════════════════════════ */
 
+function FocusBackground({ sceneKey, theme }) {
+  const [bgUrl, setBgUrl] = useState(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Hide immediately so the outgoing scene fades out before the new URL swaps in.
+    setVisible(false);
+    const loader = sceneLoaders[sceneKey] || sceneLoaders.forest;
+    Promise.resolve(loader()).then((url) => {
+      if (cancelled) return;
+      setBgUrl(url);
+      // requestAnimationFrame so the new URL has rendered before opacity ramps up.
+      requestAnimationFrame(() => { if (!cancelled) setVisible(true); });
+    });
+    return () => { cancelled = true; };
+  }, [sceneKey]);
+
+  // Dusk is the only dark theme; needs higher opacity to read against dark bg.
+  const opacity = theme.id === 'dusk' ? 0.22 : 0.12;
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+      backgroundImage: bgUrl ? `url(${bgUrl})` : 'none',
+      backgroundSize: 'cover', backgroundPosition: 'center',
+      opacity: visible ? opacity : 0,
+      transition: 'opacity 150ms ease',
+    }} />
+  );
+}
+
+function SceneThumb({ url, label, isCurrent, onClick, theme }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div onClick={onClick} title={label}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        width: 38, height: 38, borderRadius: '50%', cursor: 'pointer', flexShrink: 0,
+        backgroundImage: url ? `url(${url})` : 'none',
+        backgroundColor: theme.hov,
+        backgroundSize: 'cover', backgroundPosition: 'center',
+        border: isCurrent ? `2px solid ${theme.accent}` : `1px solid ${theme.borderL}`,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+        transition: 'border-color 0.15s, transform 0.15s',
+        transform: hov ? 'scale(1.07)' : 'scale(1)',
+      }} />
+  );
+}
+
+const SCENE_LIST = [
+  { key: 'forest', label: '森林' },
+  { key: 'sea', label: '海边' },
+  { key: 'mountain', label: '高山' },
+];
+
+function SceneSwitcher({ current, onChange, theme }) {
+  const [open, setOpen] = useState(false);
+  const [urls, setUrls] = useState({ forest: sceneForestUrl, sea: null, mountain: null });
+  const closeTimerRef = useRef(null);
+
+  useEffect(() => {
+    // Lazy-load thumbnails the first time the switcher opens. Once cached,
+    // subsequent opens are instant.
+    if (!open) return;
+    if (!urls.sea) sceneLoaders.sea().then((u) => setUrls((s) => ({ ...s, sea: u })));
+    if (!urls.mountain) sceneLoaders.mountain().then((u) => setUrls((s) => ({ ...s, mountain: u })));
+  }, [open]);
+
+  const cancelClose = () => { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimerRef.current = setTimeout(() => setOpen(false), 2000);
+  };
+
+  const currentLabel = SCENE_LIST.find((s) => s.key === current)?.label ?? '森林';
+  const others = SCENE_LIST.filter((s) => s.key !== current);
+
+  return (
+    <div onMouseEnter={() => { cancelClose(); setOpen(true); }}
+      onMouseLeave={scheduleClose}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+      {open && others.map((s) => (
+        <SceneThumb key={s.key}
+          url={urls[s.key]}
+          label={s.label}
+          isCurrent={false}
+          onClick={() => { onChange(s.key); cancelClose(); scheduleClose(); }}
+          theme={theme} />
+      ))}
+      <SceneThumb url={urls[current]} label={currentLabel}
+        isCurrent={true}
+        onClick={() => { cancelClose(); setOpen((o) => !o); }}
+        theme={theme} />
+    </div>
+  );
+}
+
 function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChangeTask,
-  onDismissComplete, onCompleteTask, pomosToday, totalFocusMin, onSaveQuickInsight, theme }) {
+  onDismissComplete, onCompleteTask, pomosToday, totalFocusMin, onSaveQuickInsight,
+  focusScene, onChangeFocusScene, theme }) {
 
   const currentTask = pomo.taskId ? (tasks || []).find(t => t.id === pomo.taskId) : null;
   const phaseLabel = {
@@ -491,14 +701,25 @@ function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChan
   }[pomo.phase] || '专注';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
-      {/* Top stats bar */}
+    <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
+      <FocusBackground sceneKey={focusScene || 'forest'} theme={theme} />
+
       <div style={{
-        alignSelf: 'stretch', display: 'flex', justifyContent: 'flex-end',
-        padding: '16px 24px', gap: 16, fontSize: 13, color: theme.sub,
+        position: 'relative', zIndex: 1, height: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
       }}>
-        <span>今日 <b style={{ color: theme.text }}>{pomosToday}</b> 个番茄</span>
-        <span>累计 <b style={{ color: theme.text }}>{totalFocusMin}</b> 分钟</span>
+      {/* Top bar: scene switcher on the left, focus stats on the right */}
+      <div style={{
+        alignSelf: 'stretch', display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '14px 22px 12px', fontSize: 13, color: theme.sub,
+      }}>
+        <SceneSwitcher current={focusScene || 'forest'}
+          onChange={onChangeFocusScene} theme={theme} />
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span>今日 <b style={{ color: theme.text }}>{pomosToday}</b> 个番茄</span>
+          <span>累计 <b style={{ color: theme.text }}>{totalFocusMin}</b> 分钟</span>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
@@ -575,7 +796,8 @@ function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChan
         )}
       </div>
 
-      {/* Completion dialog */}
+      {/* Completion dialog + confetti overlay (confetti lottie is lazy-loaded) */}
+      {pomo.showCompletion && <ConfettiOverlay />}
       {pomo.showCompletion && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -606,287 +828,6 @@ function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChan
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
-   STATS VIEW
-   ═══════════════════════════════════════════════════ */
-
-function StatCard({ label, value, sub, theme }) {
-  return (
-    <div style={{
-      flex: 1, padding: '16px 18px', borderRadius: 10,
-      border: `1px solid ${theme.borderL}`, background: theme.bg,
-    }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: '-0.02em' }}>{value}</div>
-      <div style={{ fontSize: 12, color: theme.sub, marginTop: 3 }}>{label}</div>
-      {sub && <div style={{ fontSize: 11, color: theme.muted, marginTop: 1 }}>{sub}</div>}
-    </div>
-  );
-}
-
-/* ── GitHub-style Heatmap ── */
-
-function Heatmap({ theme, activeHeatTab }) {
-  const CELL = 13, GAP = 3, WEEKS = 20;
-  const dayLabels = ['', '一', '', '三', '', '五', ''];
-  const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-
-  const { grid, monthMarkers } = useMemo(() => {
-    const today = new Date();
-    const todayDay = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - (WEEKS * 7 + todayDay));
-
-    const cells = [];
-    const mMarkers = [];
-    let lastMonth = -1;
-
-    for (let w = 0; w <= WEEKS; w++) {
-      for (let d = 0; d < 7; d++) {
-        const cur = new Date(startDate);
-        cur.setDate(cur.getDate() + w * 7 + d);
-        if (cur > today) continue;
-
-        const dateStr = cur.toISOString().slice(0, 10);
-        // Different seed per tab for visual variety
-        const tabSeed = activeHeatTab === 'tasks' ? 7 : (activeHeatTab === 'insights' ? 13 : 1);
-        let hash = 0;
-        for (let c = 0; c < dateStr.length; c++) hash = ((hash << 5) - hash + dateStr.charCodeAt(c) * tabSeed) | 0;
-        const rand = Math.abs(hash % 100);
-        const isWeekend = d >= 5;
-        let level;
-        if (activeHeatTab === 'insights') {
-          level = rand < 35 ? 0 : (rand < 60 ? 1 : (rand < 80 ? 2 : (rand < 92 ? 3 : 4)));
-        } else if (isWeekend) {
-          level = rand < 50 ? 0 : (rand < 75 ? 1 : 2);
-        } else {
-          level = rand < 20 ? 0 : (rand < 45 ? 1 : (rand < 70 ? 2 : (rand < 88 ? 3 : 4)));
-        }
-
-        cells.push({ date: dateStr, level, col: w, row: d, dateObj: cur });
-
-        if (cur.getMonth() !== lastMonth && d <= 2) {
-          if (mMarkers.length === 0 || mMarkers[mMarkers.length - 1].col < w - 1) {
-            mMarkers.push({ label: monthNames[cur.getMonth()], col: w });
-          }
-          lastMonth = cur.getMonth();
-        }
-      }
-    }
-    return { grid: cells, monthMarkers: mMarkers };
-  }, [activeHeatTab]);
-
-  const heatColor = (level) => {
-    if (theme.id === 'dusk') {
-      return ['#1e1e2a', '#3b2f10', '#6b4a0a', '#c98a08', '#f59e0b'][level] || '#1e1e2a';
-    }
-    if (theme.id === 'sage') {
-      return ['#e2ebd8', '#b8dbb8', '#6dbc6d', '#35a345', '#1a7a2e'][level] || '#e2ebd8';
-    }
-    // clarity
-    return ['#ebedf0', '#c6dbf7', '#79b8f8', '#3b82f6', '#1d4ed8'][level] || '#ebedf0';
-  };
-
-  const [tooltip, setTooltip] = useState(null);
-  const labelW = 26;
-  const totalW = labelW + (WEEKS + 1) * (CELL + GAP);
-
-  return (
-    <React.Fragment>
-      <div style={{ position: 'relative', overflow: 'hidden' }}>
-        {/* Month labels */}
-        <div style={{ display: 'flex', marginLeft: labelW, marginBottom: 6, height: 14 }}>
-          {monthMarkers.map((m, i) => (
-            <div key={i} style={{
-              position: 'absolute', left: labelW + m.col * (CELL + GAP),
-              fontSize: 11, color: theme.muted, whiteSpace: 'nowrap',
-            }}>{m.label}</div>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex' }}>
-          {/* Day labels */}
-          <div style={{
-            width: labelW, flexShrink: 0,
-            display: 'flex', flexDirection: 'column', gap: GAP, marginTop: 1,
-          }}>
-            {dayLabels.map((lbl, i) => (
-              <div key={i} style={{
-                height: CELL, fontSize: 10, color: theme.muted,
-                display: 'flex', alignItems: 'center', lineHeight: 1,
-              }}>{lbl}</div>
-            ))}
-          </div>
-
-          {/* Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateRows: `repeat(7, ${CELL}px)`,
-            gridAutoFlow: 'column',
-            gridAutoColumns: `${CELL}px`,
-            gap: GAP,
-          }}>
-            {grid.map((cell, i) => (
-              <div key={i}
-                onMouseEnter={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setTooltip({ x: r.left + r.width / 2, y: r.top - 4, date: cell.date, level: cell.level });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                style={{
-                  width: CELL, height: CELL, borderRadius: 3,
-                  background: heatColor(cell.level),
-                  gridRow: cell.row + 1,
-                  gridColumn: cell.col + 1,
-                  cursor: 'default',
-                  transition: 'outline 0.1s',
-                  outline: tooltip?.date === cell.date ? `2px solid ${theme.sub}` : '2px solid transparent',
-                  outlineOffset: -1,
-                }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Tooltip */}
-        {tooltip && (
-          <div style={{
-            position: 'fixed', left: tooltip.x, top: tooltip.y,
-            transform: 'translate(-50%, -100%)',
-            background: theme.text, color: theme.bg,
-            padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500,
-            whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 100,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          }}>
-            {tooltip.date} · {['无专注', '少量', '中等', '较多', '高强度'][tooltip.level]}
-          </div>
-        )}
-      </div>
-
-      {/* Legend */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        marginTop: 12, justifyContent: 'flex-end', fontSize: 11, color: theme.muted,
-      }}>
-        <span style={{ marginRight: 4 }}>少</span>
-        {[0, 1, 2, 3, 4].map(l => (
-          <div key={l} style={{
-            width: 12, height: 12, borderRadius: 2,
-            background: heatColor(l),
-          }} />
-        ))}
-        <span style={{ marginLeft: 4 }}>多</span>
-      </div>
-    </React.Fragment>
-  );
-}
-
-function StatsView({ pomosToday, totalFocusMin, insightsCount, theme }) {
-  const [heatTab, setHeatTab] = React.useState('focus');
-  const weekData = [
-    { day: '周一', val: 4 }, { day: '周二', val: 6 }, { day: '周三', val: 3 },
-    { day: '周四', val: 7 }, { day: '周五', val: 5 }, { day: '周六', val: 2 }, { day: '周日', val: 1 },
-  ];
-  const maxVal = Math.max(...weekData.map(d => d.val), 1);
-  const tagData = [
-    { tag: '工作', pct: 45 }, { tag: '开发', pct: 28 },
-    { tag: '设计', pct: 18 }, { tag: '个人', pct: 9 },
-  ];
-
-  const heatTabs = [
-    { id: 'focus', label: '专注时长' },
-    { id: 'tasks', label: '任务完成' },
-    { id: 'insights', label: 'Insights' },
-  ];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '22px 24px 8px' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.text, letterSpacing: '-0.02em', margin: 0 }}>统计</h1>
-        <div style={{ fontSize: 13, color: theme.sub, marginTop: 4 }}>你的专注数据概览</div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px 24px 24px', scrollbarWidth: 'none' }}>
-        {/* Summary cards - 5 cards */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-          <StatCard label="今日专注" value={`${pomosToday * 25}min`} theme={theme} />
-          <StatCard label="本周完成" value="12" sub="任务" theme={theme} />
-          <StatCard label="连续打卡" value="7" sub="天" theme={theme} />
-          <StatCard label="累计番茄" value={pomosToday + 48} theme={theme} />
-          <StatCard label="Insights" value={insightsCount || 0} sub={`本月 +${Math.min(insightsCount || 0, 8)}`} theme={theme} />
-        </div>
-
-        {/* Heatmap with 3 tabs */}
-        <div style={{
-          padding: '18px 20px', borderRadius: 10,
-          border: `1px solid ${theme.borderL}`, marginBottom: 20,
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
-          }}>
-            <div style={{ display: 'flex', gap: 2, background: theme.hov, borderRadius: 7, padding: 2 }}>
-              {heatTabs.map(t => (
-                <div key={t.id} onClick={() => setHeatTab(t.id)} style={{
-                  padding: '5px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                  fontWeight: heatTab === t.id ? 600 : 450,
-                  background: heatTab === t.id ? theme.bg : 'transparent',
-                  color: heatTab === t.id ? theme.text : theme.muted,
-                  boxShadow: heatTab === t.id ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                  transition: 'all 0.15s',
-                }}>{t.label}</div>
-              ))}
-            </div>
-            <span style={{ fontSize: 11, color: theme.muted }}>近 20 周</span>
-          </div>
-          <Heatmap theme={theme} activeHeatTab={heatTab} />
-        </div>
-
-        {/* Weekly trend + Tag distribution */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-          <div style={{
-            flex: 1, padding: '18px 20px', borderRadius: 10,
-            border: `1px solid ${theme.borderL}`,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, marginBottom: 16 }}>本周趋势</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 100 }}>
-              {weekData.map((d, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <div style={{
-                    width: '100%', maxWidth: 28, borderRadius: 4,
-                    height: Math.max(6, (d.val / maxVal) * 80),
-                    background: theme.accent, opacity: 0.7,
-                  }} />
-                  <span style={{ fontSize: 11, color: theme.muted }}>{d.day.slice(1)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{
-            flex: 1, padding: '18px 20px', borderRadius: 10,
-            border: `1px solid ${theme.borderL}`,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, marginBottom: 16 }}>标签分布</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {tagData.map((d, i) => (
-                <div key={i}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ color: theme.tags[d.tag] || theme.sub, fontWeight: 600 }}>#{d.tag}</span>
-                    <span style={{ color: theme.muted }}>{d.pct}%</span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: theme.borderL }}>
-                    <div style={{
-                      height: '100%', borderRadius: 3, width: `${d.pct}%`,
-                      background: theme.tags[d.tag] || theme.accent, opacity: 0.75,
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -967,8 +908,7 @@ function ArchiveItem({ task, onRestore, onDelete, theme }) {
 
 Object.assign(window, {
   FD_THEMES, DEFAULT_TAGS, QUICK_PLANS, formatPlanDate, buildTagColors,
-  FdIcon, TaskCheckbox, TaskItem, AddTaskInput, TaskListView,
+  FdIcon, LottieView, EmptyState, TaskCheckbox, TaskItem, AddTaskInput, TaskListView,
   CircularTimer, FocusBtn, CompletionWithInsight, FocusView,
-  StatCard, Heatmap, StatsView,
   ArchiveView, ArchiveItem,
 });
