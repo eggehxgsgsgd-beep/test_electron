@@ -11,7 +11,9 @@
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:linux": "npm run build && electron-builder --linux --publish never",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "lottie-web": "^5.13.0",
@@ -30,7 +32,8 @@
     "electron-vite": "latest",
     "sharp": "^0.34.5",
     "typescript": "latest",
-    "vite": "7"
+    "vite": "7",
+    "vitest": "^4.1.8"
   },
   "build": {
     "appId": "com.focusdo.desktop",
