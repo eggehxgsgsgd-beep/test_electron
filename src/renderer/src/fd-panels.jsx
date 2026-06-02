@@ -1,4 +1,6 @@
 // fd-panels.jsx — FocusDo V2: Detail Panel + Settings Modal
+import React from 'react';
+import { DEFAULT_TAGS, QUICK_PLANS, formatPlanDate, FdIcon } from './fd-ui.jsx';
 
 /* ═══════════════════════════════════════════════════
    DETAIL PANEL
@@ -747,8 +749,8 @@ function AboutTab({ theme }) {
    EXPORTS
    ═══════════════════════════════════════════════════ */
 
-Object.assign(window, {
+export {
   DetailPanel,
   SettingsModal, SettingsRow, SettingsSlider, SettingsToggle,
   AppearanceTab, TagsTab, PomodoroTab, NotificationTab, ShortcutsTab, DataTab, AboutTab,
-});
+};

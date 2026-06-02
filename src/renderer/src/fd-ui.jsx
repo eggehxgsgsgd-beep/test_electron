@@ -1,4 +1,5 @@
 // fd-ui.jsx — FocusDo V2: Themes, Icons, Task Components, Views
+import React from 'react';
 import lottie from 'lottie-web';
 import sceneForestUrl from './assets/scene-forest.webp';
 import emptyTodayUrl from './assets/empty-today.webp';
@@ -906,9 +907,9 @@ function ArchiveItem({ task, onRestore, onDelete, theme }) {
    EXPORTS
    ═══════════════════════════════════════════════════ */
 
-Object.assign(window, {
+export {
   FD_THEMES, DEFAULT_TAGS, QUICK_PLANS, formatPlanDate, buildTagColors,
   FdIcon, LottieView, EmptyState, TaskCheckbox, TaskItem, AddTaskInput, TaskListView,
   CircularTimer, FocusBtn, CompletionWithInsight, FocusView,
   ArchiveView, ArchiveItem,
-});
+};

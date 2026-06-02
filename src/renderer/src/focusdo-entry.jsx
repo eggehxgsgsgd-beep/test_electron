@@ -1,10 +1,3 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-
-window.React = React
-window.ReactDOM = ReactDOM
-
-await import('./fd-ui.jsx')
-await import('./fd-panels.jsx')
-await import('./fd-insights.jsx')
-await import('./focusdo-app.jsx')
+// 应用入口:加载根组件 App。
+// App 自己会 import 它需要的所有子组件,并在文件末尾完成挂载渲染。
+import './focusdo-app.jsx'

@@ -1,4 +1,6 @@
 // fd-insights.jsx — FocusDo: Insights (复盘/知识沉淀) Module
+import React from 'react';
+import { FdIcon, EmptyState } from './fd-ui.jsx';
 import emptyInsightsUrl from './assets/empty-insights.webp';
 
 /* ═══════════════════════════════════════════════════
@@ -614,6 +616,6 @@ function QuickInsightModal({ open, defaultLinkedTaskId, tasks, tagList, tagColor
    EXPORTS
    ═══════════════════════════════════════════════════ */
 
-Object.assign(window, {
+export {
   InsightItem, InsightsListView, InsightFullPage, InsightTaskLinker, QuickInsightModal,
-});
+};
