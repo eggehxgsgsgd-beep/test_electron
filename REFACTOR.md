@@ -10,11 +10,11 @@
 
 - [x] **A1** 锁定依赖版本:`"latest"` → 当前实际版本的 caret 范围,确保可复现构建
 - [ ] **A2** 接入 ESLint + Prettier,跑全量、修报错,加 `npm run lint`
-- [ ] **A3** 抽离统计纯函数到独立文件并补测试(`statStreak` / `statGroupByDate` / `statDateKey` 等)
+- [~] **A3** 抽离统计纯函数到独立文件并补测试 —— 抽离已随 B1 完成(`fd-stats.jsx`),**剩:补单测**
 
 ## 阶段 B:拆解 god component(`focusdo-app.jsx` 994 行)
 
-- [ ] **B1** 纯展示组件 `Sidebar`/`RealStatsView`/`RealHeatmap`/`RealStatCard` 移入展示层(约 -380 行)
+- [x] **B1** 纯展示组件移入展示层:stat 组件 + 纯函数 → 新建 `fd-stats.jsx`;`Sidebar` → `fd-ui.jsx`(`focusdo-app.jsx` 994 → 581 行)
 - [ ] **B2** 番茄钟计时引擎抽为 `usePomodoro` hook
 - [ ] **B3** 所有 `window.focusDo.*` 调用收拢到数据层 hook(`useFocusDoData`)
 
