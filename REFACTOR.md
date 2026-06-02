@@ -10,7 +10,7 @@
 
 - [x] **A1** 锁定依赖版本:`"latest"` → 当前实际版本的 caret 范围,确保可复现构建
 - [ ] **A2** 接入 ESLint + Prettier,跑全量、修报错,加 `npm run lint`
-- [~] **A3** 抽离统计纯函数到独立文件并补测试 —— 抽离已随 B1 完成(`fd-stats.jsx`),**剩:补单测**
+- [x] **A3** 抽离统计纯函数到独立文件并补测试 —— `fd-stats-utils.ts`(7 函数)+ 21 项单测(`fd-stats-utils.test.ts`)
 
 ## 阶段 B:拆解 god component(`focusdo-app.jsx` 994 行)
 
@@ -20,7 +20,8 @@
 
 ## 阶段 C:renderer TypeScript 化(逐文件)
 
-- [ ] **C1** tsconfig 开 `checkJs`,从纯函数/hook 开始类型化,复用 `shared/todo.ts` 类型
+- [~] **C1** tsconfig 开 `checkJs`,从纯函数/hook 开始类型化,复用 `shared/todo.ts` 类型
+  —— 已起步:`fd-stats-utils.ts` 随 A3 转为 TS(strict 门要求);`checkJs` 尚未开
 - [ ] **C2** 依次类型化 `fd-*` 展示组件
 
 ## 阶段 D:可选清理(待评估)

@@ -1,62 +1,12 @@
-// fd-stats.jsx — 统计纯函数 + 统计视图
-// 这些纯函数与 Real* 组件原先内联在 focusdo-app.jsx。抽到独立模块后既能在
-// 统计视图复用，也便于对 statStreak / statGroupByDate 等做单元测试。
+// fd-stats.jsx — 统计视图(RealStatsView / RealHeatmap / RealStatCard)
+// 统计纯函数已抽到 ./fd-stats-utils.js(零依赖、可单测)，这里只负责展示。
 import React from 'react';
 import { EmptyState } from './fd-ui.jsx';
 import emptyStatsUrl from './assets/empty-stats.webp';
-
-function statDateKey(input) {
-  if (!input) return null;
-  const date = input instanceof Date ? input : new Date(input);
-  if (Number.isNaN(date.getTime())) return String(input).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-}
-
-function statStartOfDay(date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function statAddDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function statMinutes(seconds) {
-  return Math.round((seconds || 0) / 60);
-}
-
-function statCompletedTasks(tasks) {
-  return (tasks || []).filter(t => t.done || t.completed);
-}
-
-function statGroupByDate(items, getDate, getValue = () => 1) {
-  const map = {};
-  items.forEach(item => {
-    const key = statDateKey(getDate(item));
-    if (!key) return;
-    map[key] = (map[key] || 0) + getValue(item);
-  });
-  return map;
-}
-
-function statStreak(focusSessions) {
-  // Attribute by endedAt so a session that crosses midnight counts toward the
-  // day the user actually finished focusing, not the day they started.
-  const days = new Set((focusSessions || [])
-    .filter(s => s.type === 'focus' && s.status === 'completed')
-    .map(s => statDateKey(s.endedAt))
-    .filter(Boolean));
-  let count = 0;
-  let cursor = statStartOfDay(new Date());
-  while (days.has(statDateKey(cursor))) {
-    count += 1;
-    cursor = statAddDays(cursor, -1);
-  }
-  return count;
-}
+import {
+  statDateKey, statStartOfDay, statAddDays, statMinutes,
+  statCompletedTasks, statGroupByDate, statStreak,
+} from './fd-stats-utils';
 
 function RealStatCard({ label, value, sub, theme }) {
   return (
@@ -317,8 +267,4 @@ function RealStatsView({ tasks = [], insights = [], focusSessions = [], theme })
   );
 }
 
-export {
-  statDateKey, statStartOfDay, statAddDays, statMinutes,
-  statCompletedTasks, statGroupByDate, statStreak,
-  RealStatsView,
-};
+export { RealStatsView };
