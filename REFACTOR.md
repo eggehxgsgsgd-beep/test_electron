@@ -15,7 +15,7 @@
 ## 阶段 B:拆解 god component(`focusdo-app.jsx` 994 行)
 
 - [x] **B1** 纯展示组件移入展示层:stat 组件 + 纯函数 → 新建 `fd-stats.jsx`;`Sidebar` → `fd-ui.jsx`(`focusdo-app.jsx` 994 → 581 行)
-- [ ] **B2** 番茄钟计时引擎抽为 `usePomodoro` hook
+- [x] **B2** 番茄钟计时引擎抽为 `usePomodoro` hook(`fd-use-pomodoro.js`;`focusdo-app.jsx` 581 → 401 行)
 - [ ] **B3** 所有 `window.focusDo.*` 调用收拢到数据层 hook(`useFocusDoData`)
 
 ## 阶段 C:renderer TypeScript 化(逐文件)

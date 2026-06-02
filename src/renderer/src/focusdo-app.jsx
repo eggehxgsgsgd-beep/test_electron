@@ -7,6 +7,7 @@ import {
 import { DetailPanel, SettingsModal } from './fd-panels.jsx';
 import { InsightsListView, InsightFullPage, QuickInsightModal } from './fd-insights.jsx';
 import { RealStatsView } from './fd-stats.jsx';
+import { usePomodoro } from './fd-use-pomodoro.js';
 
 const DEFAULT_SETTINGS = {
   themeKey: 'clarity',
@@ -93,7 +94,6 @@ function App() {
   const [selectedTaskId, setSelectedTaskId] = React.useState(null);
   const [selectedInsightId, setSelectedInsightId] = React.useState(null);
   const [showSettings, setShowSettings] = React.useState(false);
-  const [pomosToday, setPomosToday] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [systemThemeKey, setSystemThemeKey] = React.useState(getSystemThemeKey);
   const [insightModal, setInsightModal] = React.useState(null);
@@ -149,184 +149,17 @@ function App() {
   const theme = FD_THEMES[effectiveThemeKey] || FD_THEMES.clarity;
   const tagList = settings.tags || DEFAULT_TAGS;
   const tagColors = buildTagColors(tagList);
-  const focusSec = (settings.focusMin || 25) * 60;
-  const shortSec = (settings.shortBreakMin || 5) * 60;
-  const longSec = (settings.longBreakMin || 15) * 60;
 
-  const [pomo, setPomo] = React.useState({
-    timeLeft: focusSec, totalTime: focusSec,
-    phase: 'idle', taskId: null, consecutiveFocus: 0, showCompletion: false,
+  const {
+    pomo, pomosToday,
+    startFocus, pauseTimer, resetTimer, skipBreak,
+    changeTask, handleCompleteTask, handleDismissComplete,
+  } = usePomodoro({
+    settings,
+    applyState,
+    onMarkTaskDone: (taskId) => updateTask(taskId, { completed: true }),
+    onFocusStart: () => setActiveTab('focus'),
   });
-  const timerRef = React.useRef(null);
-  const focusStartedAtRef = React.useRef(null);
-  // Wall-clock anchor for the currently running phase (focus / shortBreak / longBreak).
-  // The setInterval below decides timeLeft from (Date.now() - phaseStartMsRef.current)
-  // rather than decrementing by 1 each tick — that way a backgrounded window
-  // whose interval gets throttled to 1 Hz / 30 s still ends up displaying the
-  // correct remaining time the moment it fires.
-  const phaseStartMsRef = React.useRef(null);
-  const phaseDurationRef = React.useRef(focusSec);
-  const settingsRef = React.useRef(settings);
-  React.useEffect(() => { settingsRef.current = settings; }, [settings]);
-  const tasksRef = React.useRef(tasks);
-  React.useEffect(() => { tasksRef.current = tasks; }, [tasks]);
-
-  const fireNotify = React.useCallback((flag, payload) => {
-    const s = settingsRef.current;
-    if (s.dnd) return;
-    if (!s[flag]) return;
-    // Errors propagate to the global unhandledrejection listener; no local swallow.
-    window.focusDo.notify(payload);
-  }, []);
-
-  React.useEffect(() => {
-    if (pomo.phase === 'idle') {
-      setPomo(p => ({ ...p, timeLeft: focusSec, totalTime: focusSec }));
-    }
-  }, [focusSec]);
-
-  React.useEffect(() => {
-    const running = pomo.phase === 'focus' || pomo.phase === 'shortBreak' || pomo.phase === 'longBreak';
-    const label = `${String(Math.floor(pomo.timeLeft / 60)).padStart(2, '0')}:${String(pomo.timeLeft % 60).padStart(2, '0')}`;
-    window.focusDo.updateTray({ running, label, phase: pomo.phase });
-    if (running && !pomo.showCompletion) {
-      timerRef.current = setInterval(() => {
-        setPomo(prev => {
-          const startMs = phaseStartMsRef.current;
-          const duration = phaseDurationRef.current;
-          if (!startMs || !duration) return prev;
-          const elapsedSec = (Date.now() - startMs) / 1000;
-          const newTimeLeft = Math.max(0, Math.ceil(duration - elapsedSec));
-          if (newTimeLeft > 0) {
-            return prev.timeLeft === newTimeLeft ? prev : { ...prev, timeLeft: newTimeLeft };
-          }
-          // newTimeLeft === 0 → phase transition
-          if (prev.phase === 'focus') {
-            const newConsec = prev.consecutiveFocus + 1;
-            const actualDuration = Math.min(prev.totalTime, Math.max(0, Math.round(elapsedSec)));
-            setPomosToday(c => c + 1);
-            window.focusDo.recordFocusSession({
-              taskId: prev.taskId || null,
-              startedAt: focusStartedAtRef.current || new Date(startMs).toISOString(),
-              endedAt: new Date().toISOString(),
-              plannedDuration: prev.totalTime,
-              actualDuration,
-              status: 'completed',
-              type: 'focus',
-            }).then(applyState);
-            if (prev.taskId) {
-              // Atomic +1 on the backend — avoids the read-modify-write race
-              // where two near-simultaneous completions could both write N+1.
-              window.focusDo.incrementPomodoroCount(prev.taskId).then(applyState);
-            }
-            focusStartedAtRef.current = null;
-            phaseStartMsRef.current = null;
-            writeInFlightFocus(null);
-            fireNotify('pomodoroNotify', { title: '番茄完成', body: '专注时段已结束，可以休息一下。' });
-            return { ...prev, timeLeft: 0, showCompletion: true, consecutiveFocus: newConsec };
-          }
-          // break phase ended
-          fireNotify('breakNotify', { title: '休息结束', body: '准备好开始下一个番茄了吗？' });
-          if (settingsRef.current.autoStart) {
-            const nextStartMs = Date.now();
-            focusStartedAtRef.current = new Date(nextStartMs).toISOString();
-            phaseStartMsRef.current = nextStartMs;
-            phaseDurationRef.current = focusSec;
-            writeInFlightFocus({
-              taskId: prev.taskId || null,
-              startedAt: focusStartedAtRef.current,
-              startedAtMs: nextStartMs,
-              plannedDuration: focusSec,
-            });
-            return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'focus', showCompletion: false };
-          }
-          phaseStartMsRef.current = null;
-          return { ...prev, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' };
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [pomo.phase, pomo.showCompletion, focusSec, fireNotify]);
-
-  const computeElapsedSec = () => {
-    const startMs = phaseStartMsRef.current;
-    if (!startMs) return 0;
-    return Math.max(0, Math.round((Date.now() - startMs) / 1000));
-  };
-
-  const writeInFlightFocus = (snap) => {
-    // Fire-and-forget. Failures bubble to the global unhandledrejection alert.
-    window.focusDo.setInFlightFocus(snap);
-  };
-
-  const startFocus = (taskId) => {
-    const nowMs = Date.now();
-    const effectiveTaskId = taskId ?? pomo.taskId ?? null;
-    focusStartedAtRef.current = new Date(nowMs).toISOString();
-    phaseStartMsRef.current = nowMs;
-    phaseDurationRef.current = focusSec;
-    setPomo(p => ({
-      timeLeft: focusSec, totalTime: focusSec,
-      phase: 'focus', taskId: taskId ?? p.taskId,
-      consecutiveFocus: p.consecutiveFocus, showCompletion: false,
-    }));
-    writeInFlightFocus({
-      taskId: effectiveTaskId,
-      startedAt: focusStartedAtRef.current,
-      startedAtMs: nowMs,
-      plannedDuration: focusSec,
-    });
-    setActiveTab('focus');
-  };
-  const recordPartialFocus = () => {
-    if (!focusStartedAtRef.current || pomo.phase !== 'focus') return;
-    const elapsed = Math.min(pomo.totalTime, computeElapsedSec());
-    window.focusDo.recordFocusSession({
-      taskId: pomo.taskId || null,
-      startedAt: focusStartedAtRef.current,
-      endedAt: new Date().toISOString(),
-      plannedDuration: pomo.totalTime,
-      actualDuration: elapsed,
-      status: 'abandoned',
-      type: 'focus',
-    }).then(applyState);
-  };
-  const pauseTimer = () => {
-    recordPartialFocus();
-    writeInFlightFocus(null);
-    focusStartedAtRef.current = null;
-    phaseStartMsRef.current = null;
-    window.focusDo.updateTray({ running: false });
-    setPomo(p => ({ ...p, phase: 'idle' }));
-  };
-  const resetTimer = () => {
-    recordPartialFocus();
-    writeInFlightFocus(null);
-    focusStartedAtRef.current = null;
-    phaseStartMsRef.current = null;
-    window.focusDo.updateTray({ running: false });
-    setPomo({
-      timeLeft: focusSec, totalTime: focusSec,
-      phase: 'idle', taskId: null, consecutiveFocus: 0, showCompletion: false,
-    });
-  };
-  const skipBreak = () => {
-    phaseStartMsRef.current = null;
-    setPomo(p => ({ ...p, timeLeft: focusSec, totalTime: focusSec, phase: 'idle' }));
-  };
-
-  const handleCompleteTask = (markDone) => {
-    if (markDone && pomo.taskId) updateTask(pomo.taskId, { completed: true });
-    const isLong = pomo.consecutiveFocus > 0 && pomo.consecutiveFocus % 4 === 0;
-    const breakSec = isLong ? longSec : shortSec;
-    phaseStartMsRef.current = Date.now();
-    phaseDurationRef.current = breakSec;
-    setPomo(p => ({
-      ...p, timeLeft: breakSec, totalTime: breakSec,
-      phase: isLong ? 'longBreak' : 'shortBreak', showCompletion: false,
-    }));
-  };
-  const handleDismissComplete = () => handleCompleteTask(false);
 
   const toggleTask = (id) => {
     const task = tasks.find(t => t.id === id);
@@ -492,20 +325,7 @@ function App() {
           <FocusView pomo={pomo} tasks={tasks}
             onStart={() => startFocus(pomo.taskId)}
             onPause={pauseTimer} onReset={resetTimer} onSkipBreak={skipBreak}
-            onChangeTask={id => {
-              setPomo(p => ({ ...p, taskId: id }));
-              // Keep the in-flight snapshot in sync with the visible task link
-              // so a crash recovery doesn't attribute the session to the
-              // task the user just explicitly unlinked.
-              if (focusStartedAtRef.current && phaseStartMsRef.current) {
-                writeInFlightFocus({
-                  taskId: id,
-                  startedAt: focusStartedAtRef.current,
-                  startedAtMs: phaseStartMsRef.current,
-                  plannedDuration: phaseDurationRef.current,
-                });
-              }
-            }}
+            onChangeTask={changeTask}
             onCompleteTask={handleCompleteTask} onDismissComplete={handleDismissComplete}
             onSaveQuickInsight={saveQuickInsight}
             focusScene={settings.focusScene || 'forest'}
