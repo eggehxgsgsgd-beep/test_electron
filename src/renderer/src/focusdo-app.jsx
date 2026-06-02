@@ -8,113 +8,29 @@ import { DetailPanel, SettingsModal } from './fd-panels.jsx';
 import { InsightsListView, InsightFullPage, QuickInsightModal } from './fd-insights.jsx';
 import { RealStatsView } from './fd-stats.jsx';
 import { usePomodoro } from './fd-use-pomodoro.js';
-
-const DEFAULT_SETTINGS = {
-  themeKey: 'clarity',
-  focusMin: 25,
-  shortBreakMin: 5,
-  longBreakMin: 15,
-  autoStart: false,
-  sound: true,
-  pomodoroNotify: true,
-  breakNotify: true,
-  dnd: false,
-  followSystem: false,
-  focusScene: 'forest',
-  tags: DEFAULT_TAGS,
-};
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function normalizePlanDate(planDate) {
-  if (planDate === todayKey()) return 'today';
-  return planDate;
-}
-
-function toUiTask(task) {
-  // Backend Task has `completed`; UI components use `done`. Map directly — no
-  // `?? false` because the type guarantees boolean.
-  return {
-    ...task,
-    done: task.completed,
-    planDate: normalizePlanDate(task.planDate),
-  };
-}
-
-function toUiState(state) {
-  // `state` comes from the typed IPC contract (FocusDoState). tasks/insights/
-  // focusSessions/settings are always present, so we trust them directly.
-  // The settings block keeps legacy-key fallbacks (focusMinutes vs focusMin,
-  // theme vs themeKey) because the on-disk settings JSON may carry older keys.
-  const s = state.settings;
-  return {
-    tasks: state.tasks.map(toUiTask),
-    insights: state.insights,
-    focusSessions: state.focusSessions,
-    settings: {
-      ...DEFAULT_SETTINGS,
-      ...s,
-      themeKey: s.themeKey || themeToThemeKey(s.theme),
-      focusMin: s.focusMin || s.focusMinutes || 25,
-      shortBreakMin: s.shortBreakMin || s.shortBreakMinutes || 5,
-      longBreakMin: s.longBreakMin || s.longBreakMinutes || 15,
-      tags: s.tags || DEFAULT_TAGS,
-    },
-  };
-}
-
-function themeToThemeKey(theme) {
-  if (theme === 'dusk') return 'dusk';
-  if (theme === 'moss' || theme === 'sage') return 'sage';
-  return 'clarity';
-}
-
-function settingsForBackend(settings) {
-  return {
-    ...settings,
-    theme: settings.themeKey === 'sage' ? 'moss' : settings.themeKey,
-    focusMinutes: settings.focusMin,
-    shortBreakMinutes: settings.shortBreakMin,
-    longBreakMinutes: settings.longBreakMin,
-  };
-}
+import { useFocusDoData } from './fd-use-focusdo-data.js';
 
 function getSystemThemeKey() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dusk' : 'clarity';
 }
 
 function App() {
-  const [tasks, setTasks] = React.useState([]);
-  const [insights, setInsights] = React.useState([]);
-  const [focusSessions, setFocusSessions] = React.useState([]);
-  const [settings, setSettings] = React.useState(DEFAULT_SETTINGS);
+  const {
+    tasks, insights, focusSessions, settings, loading,
+    applyState, createTask, updateTask, deleteTask: deleteTaskRaw,
+    createInsight, updateInsight, deleteInsight: deleteInsightRaw,
+    updateSettings,
+  } = useFocusDoData();
+
   const [activeTab, setActiveTab] = React.useState('today');
   const [selectedTaskId, setSelectedTaskId] = React.useState(null);
   const [selectedInsightId, setSelectedInsightId] = React.useState(null);
   const [showSettings, setShowSettings] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
   const [systemThemeKey, setSystemThemeKey] = React.useState(getSystemThemeKey);
   const [insightModal, setInsightModal] = React.useState(null);
   // Bumped on Cmd/Ctrl+N — the visible TaskListView's AddTaskInput watches this
   // and focuses its <input> when the tick changes.
   const [addTaskFocusTick, setAddTaskFocusTick] = React.useState(0);
-
-  React.useEffect(() => {
-    window.focusDo.load().then((state) => {
-      const ui = toUiState(state);
-      setTasks(ui.tasks);
-      setInsights(ui.insights);
-      setFocusSessions(ui.focusSessions);
-      setSettings(ui.settings);
-      setLoading(false);
-    }).catch((err) => {
-      console.error('[FocusDo] load failed:', err);
-      window.alert(`FocusDo 出错：${err?.message ?? err}`);
-      setLoading(false);
-    });
-  }, []);
 
   React.useEffect(() => {
     const onRejection = (event) => {
@@ -126,14 +42,6 @@ function App() {
     };
     window.addEventListener('unhandledrejection', onRejection);
     return () => window.removeEventListener('unhandledrejection', onRejection);
-  }, []);
-
-  const applyState = React.useCallback((state) => {
-    const ui = toUiState(state);
-    setTasks(ui.tasks);
-    setInsights(ui.insights);
-    setFocusSessions(ui.focusSessions);
-    setSettings(ui.settings);
   }, []);
 
   React.useEffect(() => {
@@ -161,22 +69,12 @@ function App() {
     onFocusStart: () => setActiveTab('focus'),
   });
 
+  // 以下是带界面关注点的数据封装:在 useFocusDoData 的纯增删改之上叠加选中态
+  // 清理、二次确认、按当前页推断 planDate 等。纯 IPC 已由数据层 hook 收口。
+  const addTask = (title) => createTask({ title, planDate: activeTab === 'today' ? 'today' : null });
   const toggleTask = (id) => {
     const task = tasks.find(t => t.id === id);
     if (task) updateTask(id, { completed: !task.done });
-  };
-  const addTask = async (title) => {
-    const state = await window.focusDo.createTask({ title, planDate: activeTab === 'today' ? 'today' : null });
-    applyState(state);
-  };
-  const updateTask = async (id, updates) => {
-    const payload = { id, ...updates };
-    if ('done' in payload) {
-      payload.completed = payload.done;
-      delete payload.done;
-    }
-    const state = await window.focusDo.updateTask(payload);
-    applyState(state);
   };
   const archiveTask = (id) => {
     updateTask(id, { archived: true });
@@ -184,53 +82,33 @@ function App() {
   };
   const deleteTask = async (id) => {
     if (!window.confirm('确定删除该任务？此操作不可恢复。')) return;
-    const state = await window.focusDo.deleteTask(id);
-    applyState(state);
+    await deleteTaskRaw(id);
     if (selectedTaskId === id) setSelectedTaskId(null);
   };
   const restoreTask = (id) => updateTask(id, { archived: false, completed: false });
-  const updateSettings = async (updates) => {
-    const prev = settings;
-    const next = { ...settings, ...updates };
-    setSettings(next);
-    try {
-      const state = await window.focusDo.updateSettings(settingsForBackend(next));
-      applyState(state);
-    } catch (err) {
-      setSettings(prev);
-      throw err;
-    }
-  };
 
   const openInsightModal = React.useCallback((linkedTaskId) => {
     setInsightModal({ defaultLinkedTaskId: linkedTaskId || null });
   }, []);
   const submitNewInsight = async ({ content, title, tag, linkedTaskId }) => {
     const prevIds = new Set(insights.map(i => i.id));
-    const state = await window.focusDo.createInsight({
+    const state = await createInsight({
       content: content || '',
       title: title || null,
       linkedTaskId: linkedTaskId || null,
       tag: tag || null,
     });
-    applyState(state);
     setInsightModal(null);
     const created = (state.insights || []).find(i => !prevIds.has(i.id));
     if (created) setActiveTab('insights');
   };
   const saveQuickInsight = async ({ content, linkedTaskId, tag }) => {
     // Called from the pomodoro completion dialog — content is guaranteed non-empty by caller.
-    const state = await window.focusDo.createInsight({ content, linkedTaskId: linkedTaskId || null, tag: tag || null });
-    applyState(state);
-  };
-  const updateInsight = async (id, updates) => {
-    const state = await window.focusDo.updateInsight({ id, ...updates });
-    applyState(state);
+    await createInsight({ content, linkedTaskId: linkedTaskId || null, tag: tag || null });
   };
   const deleteInsight = async (id) => {
     if (!window.confirm('确定删除该洞察？此操作不可恢复。')) return;
-    const state = await window.focusDo.deleteInsight(id);
-    applyState(state);
+    await deleteInsightRaw(id);
     if (selectedInsightId === id) setSelectedInsightId(null);
   };
   const navigateToInsight = (insId) => {
@@ -240,7 +118,7 @@ function App() {
   };
 
   const nonArchived = tasks.filter(t => !t.archived);
-  // toUiTask 已经把 ISO 今天日期归一为 'today'，所以这里只需比对字符串。
+  // 数据层(useFocusDoData)已把 ISO 今天日期归一为 'today'，这里只需比对字符串。
   const todayTasks = nonArchived.filter(t => t.planDate === 'today');
   const allTasks = nonArchived;
   const archivedTasks = tasks.filter(t => t.archived);
