@@ -42,6 +42,17 @@
 
 - [x] **D1** 统一前后端两套设置词汇 —— 已在 C-S 完成(系统未上线,兼容顾虑消失,故提前合并)
 
+## 阶段 E:目录重组(关注点分离,先于 C 做)
+
+> 目标:专业目录结构(PascalCase 组件、去 `fd-` 前缀、`@/` + `@shared` 别名)。
+> 暂停 JS→TS(C),先把代码按职责拆进目录。完成后 C 在更小的文件上更易推进。
+
+- [x] **E1** 配 `@/`/`@shared` 别名 + 迁移基础层(`hooks/`、`lib/`、`types.ts`、`components/stats/StatsView`)
+- [ ] **E2** 拆 `fd-ui.jsx` → `theme/`、`components/{primitives,tasks,focus,archive,layout}`
+- [ ] **E3** 拆 `fd-panels.jsx` → `components/tasks/DetailPanel` + `components/settings/SettingsModal`
+- [ ] **E4** 拆 `fd-insights.jsx` → `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal}`
+- [ ] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(更新 index.html)
+
 ---
 
 ### 注意事项

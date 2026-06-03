@@ -1,12 +1,12 @@
 // fd-stats.jsx — 统计视图(RealStatsView / RealHeatmap / RealStatCard)
 // 统计纯函数已抽到 ./fd-stats-utils.js(零依赖、可单测)，这里只负责展示。
 import React from 'react';
-import { EmptyState } from './fd-ui.jsx';
-import emptyStatsUrl from './assets/empty-stats.webp';
+import { EmptyState } from '@/fd-ui.jsx';
+import emptyStatsUrl from '@/assets/empty-stats.webp';
 import {
   statDateKey, statStartOfDay, statAddDays, statMinutes,
   statCompletedTasks, statGroupByDate, statStreak,
-} from './fd-stats-utils';
+} from '@/lib/stats';
 
 function RealStatCard({ label, value, sub, theme }) {
   return (

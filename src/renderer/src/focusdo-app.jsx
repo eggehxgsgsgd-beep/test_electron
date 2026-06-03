@@ -6,9 +6,9 @@ import {
 } from './fd-ui.jsx';
 import { DetailPanel, SettingsModal } from './fd-panels.jsx';
 import { InsightsListView, InsightFullPage, QuickInsightModal } from './fd-insights.jsx';
-import { RealStatsView } from './fd-stats.jsx';
-import { usePomodoro } from './fd-use-pomodoro.js';
-import { useFocusDoData } from './fd-use-focusdo-data';
+import { RealStatsView } from '@/components/stats/StatsView';
+import { usePomodoro } from '@/hooks/usePomodoro';
+import { useFocusDoData } from '@/hooks/useFocusDoData';
 
 function getSystemThemeKey() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dusk' : 'clarity';

@@ -11,7 +11,7 @@ import {
   statCompletedTasks,
   statGroupByDate,
   statStreak,
-} from './fd-stats-utils'
+} from './stats'
 
 describe('statDateKey', () => {
   it('空值返回 null', () => {

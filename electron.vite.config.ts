@@ -22,6 +22,12 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
+    resolve: {
+      alias: {
+        '@': resolve('src/renderer/src'),
+        '@shared': resolve('src/shared')
+      }
+    },
     plugins: [react()],
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version)
