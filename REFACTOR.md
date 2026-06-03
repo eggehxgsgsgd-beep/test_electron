@@ -21,11 +21,19 @@
 - [x] **B3** App 的数据 IPC 收拢到 `useFocusDoData`(含 UI↔后端映射);App 零直接 IPC。
   引擎级 IPC(usePomodoro)与设置弹窗自包含的导出按钮按设计保留。`focusdo-app.jsx` 401 → 279 行
 
-## 阶段 C:renderer TypeScript 化(逐文件)
+## 阶段 C:renderer 全面 TypeScript 化(叶子优先,逐文件,每个一 commit)
 
-- [~] **C1** tsconfig 开 `checkJs`,从纯函数/hook 开始类型化,复用 `shared/todo.ts` 类型
-  —— 已起步:`fd-stats-utils.ts` 随 A3 转为 TS(strict 门要求);`checkJs` 尚未开
-- [ ] **C2** 依次类型化 `fd-*` 展示组件
+> 复用 `shared/todo.ts` 后端类型 + 新建 `fd-types.ts`(渲染层 UI 类型)。
+> `vite-env.d.ts` 已声明 `window.focusDo: FocusDoApi`,IPC 调用自动获类型。
+> 已完成:`fd-stats-utils.ts`(随 A3)。
+
+- [x] **C1** 新建 `fd-types.ts`(`UiTask`/`UiSettings`/`UiState`)+ `fd-use-focusdo-data.js → .ts`
+- [ ] **C2** `fd-use-pomodoro.js → .ts`(定义 `Pomo`/`PomoPhase`)
+- [ ] **C3** `fd-stats.jsx → .tsx`
+- [ ] **C4** `fd-ui.jsx → .tsx`(最大块;定义 `Theme` 类型 + 各组件 props)
+- [ ] **C5** `fd-panels.jsx → .tsx`
+- [ ] **C6** `fd-insights.jsx → .tsx`
+- [ ] **C7** `focusdo-app.jsx → .tsx` + `focusdo-entry.jsx → .ts`
 
 ## 阶段 D:可选清理(待评估)
 
