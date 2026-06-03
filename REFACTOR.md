@@ -52,7 +52,8 @@
   `components/tasks/TaskListView`、`components/focus/FocusView`、`components/archive/ArchiveView`、`components/layout/Sidebar`
 - [x] **E3** 拆 `fd-panels.jsx`(756 行)→ `tasks/DetailPanel` + `settings/{SettingsModal,SettingsControls,tabs/*}`(6 个 Tab)。
   共享小部件下沉为 `SettingsControls`;每个 Tab 独立成文件(独立单元 ≠ 私有零件)。**按指令删除 AboutTab(行为变更)**
-- [ ] **E4** 拆 `fd-insights.jsx` → `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal}`
+- [x] **E4** 拆 `fd-insights.jsx`(621 行)→ `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal,InsightTaskLinker}`。
+  `InsightItem` 作私有零件留在 ListView;`InsightTaskLinker` 被详情页与弹窗共用 → 独立成共享文件
 - [ ] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(更新 index.html)
 
 ---
