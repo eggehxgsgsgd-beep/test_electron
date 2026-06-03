@@ -9,7 +9,9 @@
 ## 阶段 A:地基(安全网)
 
 - [x] **A1** 锁定依赖版本:`"latest"` → 当前实际版本的 caret 范围,确保可复现构建
-- [ ] **A2** 接入 ESLint + Prettier,跑全量、修报错,加 `npm run lint`
+- [x] **A2** 接入 ESLint(flat config)+ Prettier,加 `lint`/`format` 脚本。ESLint 修掉 5 处死代码;
+  Prettier 采**渐进式**(配置就位但不重排存量文件——全量重排约 2500 行,churn 过大不划算)。
+  剩 8 条 `exhaustive-deps` 告警(刻意手动管依赖,不阻断)
 - [x] **A3** 抽离统计纯函数到独立文件并补测试 —— `fd-stats-utils.ts`(7 函数)+ 21 项单测(`fd-stats-utils.test.ts`)
 
 ## 阶段 B:拆解 god component(`focusdo-app.jsx` 994 行)

@@ -7,7 +7,7 @@
 // so we can re-export to higher quality later if needed.
 import sharp from 'sharp'
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 const SRC = 'src/renderer/src/assets/source'
 const OUT = 'src/renderer/src/assets'

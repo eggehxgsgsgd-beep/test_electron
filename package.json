@@ -13,7 +13,10 @@
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "preview": "electron-vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "lottie-web": "^5.13.0",
@@ -22,6 +25,7 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
@@ -30,8 +34,15 @@
     "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
     "sharp": "^0.34.5",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
     "vite": "^7.3.3",
     "vitest": "^4.1.8"
   },

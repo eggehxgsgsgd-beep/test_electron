@@ -635,10 +635,6 @@ export class TodoStore {
   }
 }
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function rowToTask(row: unknown[]): Task {
   return {
     id: String(row[0]),

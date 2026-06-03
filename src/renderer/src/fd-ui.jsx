@@ -23,7 +23,7 @@ const sceneLoaders = {
   mountain: () => import('./assets/scene-mountain.webp').then(m => m.default),
 };
 
-const { useState, useRef, useEffect, useCallback, useMemo } = React;
+const { useState, useRef, useEffect, useMemo } = React;
 
 /* ═══════════════════════════════════════════════════
    THEMES
@@ -698,9 +698,6 @@ function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChan
   focusScene, onChangeFocusScene, theme }) {
 
   const currentTask = pomo.taskId ? (tasks || []).find(t => t.id === pomo.taskId) : null;
-  const phaseLabel = {
-    idle: '专注', focus: '专注中', shortBreak: '短休息', longBreak: '长休息',
-  }[pomo.phase] || '专注';
 
   return (
     <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
@@ -824,7 +821,7 @@ function FocusView({ pomo, tasks, onStart, onPause, onReset, onSkipBreak, onChan
             {!currentTask && (
               <CompletionWithInsight
                 taskId={null} taskTag={null}
-                onComplete={(markDone) => onDismissComplete()} onSaveInsight={onSaveQuickInsight} theme={theme}
+                onComplete={() => onDismissComplete()} onSaveInsight={onSaveQuickInsight} theme={theme}
                 freeMode />
             )}
           </div>
