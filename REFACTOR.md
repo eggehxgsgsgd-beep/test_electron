@@ -50,7 +50,8 @@
 - [x] **E1** 配 `@/`/`@shared` 别名 + 迁移基础层(`hooks/`、`lib/`、`types.ts`、`components/stats/StatsView`)
 - [x] **E2** 拆 `fd-ui.jsx`(1018 行)→ 8 文件:`theme/themes.js`、`components/primitives/{Icon,LottieView,EmptyState}`、
   `components/tasks/TaskListView`、`components/focus/FocusView`、`components/archive/ArchiveView`、`components/layout/Sidebar`
-- [ ] **E3** 拆 `fd-panels.jsx` → `components/tasks/DetailPanel` + `components/settings/SettingsModal`
+- [x] **E3** 拆 `fd-panels.jsx`(756 行)→ `tasks/DetailPanel` + `settings/{SettingsModal,SettingsControls,tabs/*}`(6 个 Tab)。
+  共享小部件下沉为 `SettingsControls`;每个 Tab 独立成文件(独立单元 ≠ 私有零件)。**按指令删除 AboutTab(行为变更)**
 - [ ] **E4** 拆 `fd-insights.jsx` → `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal}`
 - [ ] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(更新 index.html)
 
