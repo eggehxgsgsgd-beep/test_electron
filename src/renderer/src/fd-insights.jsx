@@ -1,6 +1,7 @@
 // fd-insights.jsx — FocusDo: Insights (复盘/知识沉淀) Module
 import React from 'react';
-import { FdIcon, EmptyState } from './fd-ui.jsx';
+import { FdIcon } from '@/components/primitives/Icon';
+import { EmptyState } from '@/components/primitives/EmptyState';
 import emptyInsightsUrl from './assets/empty-insights.webp';
 
 /* ═══════════════════════════════════════════════════

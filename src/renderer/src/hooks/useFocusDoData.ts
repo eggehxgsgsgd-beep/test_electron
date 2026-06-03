@@ -9,7 +9,7 @@
 // 通知、in-flight 快照),它通过本 hook 提供的 applyState 回写状态;设置弹窗里
 // 自包含的"导出 JSON"仍走其本地 window.focusDo.exportData。
 import React from 'react'
-import { DEFAULT_TAGS } from '@/fd-ui.jsx'
+import { DEFAULT_TAGS } from '@/theme/themes'
 import type {
   FocusDoState,
   TagOption,

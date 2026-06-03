@@ -1,6 +1,7 @@
 // fd-panels.jsx — FocusDo V2: Detail Panel + Settings Modal
 import React from 'react';
-import { DEFAULT_TAGS, QUICK_PLANS, formatPlanDate, FdIcon } from './fd-ui.jsx';
+import { DEFAULT_TAGS, QUICK_PLANS, formatPlanDate } from '@/theme/themes';
+import { FdIcon } from '@/components/primitives/Icon';
 
 /* ═══════════════════════════════════════════════════
    DETAIL PANEL

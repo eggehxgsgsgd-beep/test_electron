@@ -1,9 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import {
-  FD_THEMES, DEFAULT_TAGS, buildTagColors,
-  TaskListView, FocusView, ArchiveView, Sidebar
-} from './fd-ui.jsx';
+import { FD_THEMES, DEFAULT_TAGS, buildTagColors } from '@/theme/themes';
+import { TaskListView } from '@/components/tasks/TaskListView';
+import { FocusView } from '@/components/focus/FocusView';
+import { ArchiveView } from '@/components/archive/ArchiveView';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { DetailPanel, SettingsModal } from './fd-panels.jsx';
 import { InsightsListView, InsightFullPage, QuickInsightModal } from './fd-insights.jsx';
 import { RealStatsView } from '@/components/stats/StatsView';

@@ -48,7 +48,8 @@
 > 暂停 JS→TS(C),先把代码按职责拆进目录。完成后 C 在更小的文件上更易推进。
 
 - [x] **E1** 配 `@/`/`@shared` 别名 + 迁移基础层(`hooks/`、`lib/`、`types.ts`、`components/stats/StatsView`)
-- [ ] **E2** 拆 `fd-ui.jsx` → `theme/`、`components/{primitives,tasks,focus,archive,layout}`
+- [x] **E2** 拆 `fd-ui.jsx`(1018 行)→ 8 文件:`theme/themes.js`、`components/primitives/{Icon,LottieView,EmptyState}`、
+  `components/tasks/TaskListView`、`components/focus/FocusView`、`components/archive/ArchiveView`、`components/layout/Sidebar`
 - [ ] **E3** 拆 `fd-panels.jsx` → `components/tasks/DetailPanel` + `components/settings/SettingsModal`
 - [ ] **E4** 拆 `fd-insights.jsx` → `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal}`
 - [ ] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(更新 index.html)
