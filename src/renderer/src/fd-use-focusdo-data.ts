@@ -12,7 +12,6 @@ import React from 'react'
 import { DEFAULT_TAGS } from './fd-ui.jsx'
 import type {
   FocusDoState,
-  FocusSettings,
   TagOption,
   CreateTaskInput,
   UpdateTaskInput,
@@ -56,43 +55,13 @@ function toUiTask(task: FocusDoState['tasks'][number]): UiTask {
   }
 }
 
-// theme 可能是后端值('clear'|'dusk'|'moss')也可能是历史遗留串,故按 string 收。
-function themeToThemeKey(theme: string): UiSettings['themeKey'] {
-  if (theme === 'dusk') return 'dusk'
-  if (theme === 'moss' || theme === 'sage') return 'sage'
-  return 'clarity'
-}
-
 function toUiState(state: FocusDoState): UiState {
-  // `state` 来自类型化的 IPC 契约(FocusDoState)。settings 块保留旧键回退
-  // (focusMinutes vs focusMin、theme vs themeKey),因为磁盘上的 settings JSON
-  // 可能携带旧版键——故把 s 视为"后端字段 + 可能并存的 UI 字段"。
-  const s = state.settings as FocusSettings & Partial<UiSettings>
+  // 渲染层与后端的 settings 形状已统一;仅对默认值做兜底合并(防御缺键的半截数据)。
   return {
     tasks: state.tasks.map(toUiTask),
     insights: state.insights,
     focusSessions: state.focusSessions,
-    settings: {
-      ...DEFAULT_SETTINGS,
-      ...s, // 展开不触发多余属性检查:带过持久化的 UI 字段;后端专属键无害
-      themeKey: s.themeKey || themeToThemeKey(s.theme),
-      focusMin: s.focusMin || s.focusMinutes || 25,
-      shortBreakMin: s.shortBreakMin || s.shortBreakMinutes || 5,
-      longBreakMin: s.longBreakMin || s.longBreakMinutes || 15,
-      tags: s.tags || (DEFAULT_TAGS as TagOption[]),
-    },
-  }
-}
-
-function settingsForBackend(settings: UiSettings) {
-  return {
-    ...settings,
-    // 历史遗留:UI 'clarity' 会被原样发成后端 theme 'clarity'(而非官方的 'clear'),
-    // 靠 toUiState 的 else 兜底回 'clarity' 才得以来回对齐。此处保持现状,不改行为。
-    theme: (settings.themeKey === 'sage' ? 'moss' : settings.themeKey) as FocusSettings['theme'],
-    focusMinutes: settings.focusMin,
-    shortBreakMinutes: settings.shortBreakMin,
-    longBreakMinutes: settings.longBreakMin,
+    settings: { ...DEFAULT_SETTINGS, ...state.settings },
   }
 }
 
@@ -168,12 +137,12 @@ export function useFocusDoData() {
     return state
   }
   const updateSettings = async (updates: Partial<UiSettings>) => {
-    // 乐观更新:先本地切换,失败再回滚。settingsForBackend 把 UI 词汇映射回后端。
+    // 乐观更新:先本地切换,失败再回滚。设置词汇已统一,直接发后端、无需翻译。
     const prev = settings
     const next = { ...settings, ...updates }
     setSettings(next)
     try {
-      const state = await window.focusDo.updateSettings(settingsForBackend(next))
+      const state = await window.focusDo.updateSettings(next)
       applyState(state)
     } catch (err) {
       setSettings(prev)

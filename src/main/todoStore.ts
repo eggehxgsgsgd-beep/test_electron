@@ -23,10 +23,16 @@ import type {
 const IN_FLIGHT_STALE_MS = 4 * 60 * 60 * 1000
 
 const DEFAULT_SETTINGS: FocusSettings = {
-  theme: 'clear',
-  focusMinutes: 25,
-  shortBreakMinutes: 5,
-  longBreakMinutes: 15,
+  themeKey: 'clarity',
+  focusMin: 25,
+  shortBreakMin: 5,
+  longBreakMin: 15,
+  autoStart: false,
+  sound: true,
+  pomodoroNotify: true,
+  breakNotify: true,
+  dnd: false,
+  followSystem: false,
   focusScene: 'forest',
   tags: [
     { name: '工作', color: '#3b82f6' },

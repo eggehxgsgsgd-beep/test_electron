@@ -34,11 +34,21 @@ export type TagOption = {
 
 export type FocusScene = 'forest' | 'sea' | 'mountain'
 
+export type ThemeKey = 'clarity' | 'dusk' | 'sage'
+
+// 渲染层与后端统一使用这一套设置(前端短名)。早先后端用 theme/focusMinutes、
+// 前端用 themeKey/focusMin 的两套词汇已合并(系统未上线,无存量数据需兼容)。
 export type FocusSettings = {
-  theme: 'clear' | 'dusk' | 'moss'
-  focusMinutes: number
-  shortBreakMinutes: number
-  longBreakMinutes: number
+  themeKey: ThemeKey
+  focusMin: number
+  shortBreakMin: number
+  longBreakMin: number
+  autoStart: boolean
+  sound: boolean
+  pomodoroNotify: boolean
+  breakNotify: boolean
+  dnd: boolean
+  followSystem: boolean
   focusScene: FocusScene
   tags: TagOption[]
 }

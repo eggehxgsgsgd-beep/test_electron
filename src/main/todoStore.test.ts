@@ -25,7 +25,7 @@ describe('TodoStore — smoke test', () => {
     expect(state.tasks).toEqual([])
     expect(state.insights).toEqual([])
     expect(state.focusSessions).toEqual([])
-    expect(state.settings.focusMinutes).toBe(25)
+    expect(state.settings.focusMin).toBe(25)
     expect(state.settings.tags).toHaveLength(4)
   })
 

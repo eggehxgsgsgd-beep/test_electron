@@ -28,6 +28,9 @@
 > 已完成:`fd-stats-utils.ts`(随 A3)。
 
 - [x] **C1** 新建 `fd-types.ts`(`UiTask`/`UiSettings`/`UiState`)+ `fd-use-focusdo-data.js → .ts`
+- [x] **C-S** 统一前后端设置词汇(= 原 D1):`shared/todo.ts` 改用前端短名(themeKey/focusMin)
+  并正式声明 6 个开关项;删除 `settingsForBackend`/`themeToThemeKey` 翻译层、旧键回退、
+  `clarity/clear` 错位。`UiSettings` 现为 `FocusSettings` 别名。(系统未上线,无需兼容)
 - [ ] **C2** `fd-use-pomodoro.js → .ts`(定义 `Pomo`/`PomoPhase`)
 - [ ] **C3** `fd-stats.jsx → .tsx`
 - [ ] **C4** `fd-ui.jsx → .tsx`(最大块;定义 `Theme` 类型 + 各组件 props)
@@ -35,12 +38,13 @@
 - [ ] **C6** `fd-insights.jsx → .tsx`
 - [ ] **C7** `focusdo-app.jsx → .tsx` + `focusdo-entry.jsx → .ts`
 
-## 阶段 D:可选清理(待评估)
+## 阶段 D:可选清理
 
-- [ ] **D1**(暂缓)统一前后端两套设置词汇 —— 承载兼容旧数据职责,风险 > 收益,前面做完再评估
+- [x] **D1** 统一前后端两套设置词汇 —— 已在 C-S 完成(系统未上线,兼容顾虑消失,故提前合并)
 
 ---
 
 ### 注意事项
-- 别为消除"两套词汇映射"而大改**数据形状**:那层映射在保护存量数据(`migrateFocusScene`、legacy fallback)。重构只动**结构**,不动**数据契约**。
+- ~~别为消除"两套词汇映射"而大改数据形状~~ → 已在 C-S 主动统一:系统未上线、无存量数据需兼容,
+  保留翻译层的理由不再成立。`migrateFocusScene`(focusScene 的取值兜底)仍保留,与本次无关。
 - 每个 task 单独 commit,完成后停下 review。
