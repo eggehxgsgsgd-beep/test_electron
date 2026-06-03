@@ -54,7 +54,7 @@
   共享小部件下沉为 `SettingsControls`;每个 Tab 独立成文件(独立单元 ≠ 私有零件)。**按指令删除 AboutTab(行为变更)**
 - [x] **E4** 拆 `fd-insights.jsx`(621 行)→ `components/insights/{InsightsListView,InsightFullPage,QuickInsightModal,InsightTaskLinker}`。
   `InsightItem` 作私有零件留在 ListView;`InsightTaskLinker` 被详情页与弹窗共用 → 独立成共享文件
-- [ ] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(更新 index.html)
+- [x] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(同步更新 index.html 与入口 import)
 
 ---
 
