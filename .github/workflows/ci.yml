@@ -1,0 +1,43 @@
+name: CI
+
+# 每次 push 到 main 或开 PR 时,自动跑质量闸门(lint + test + build)。
+# 与 release.yml 互补:release 只在打 tag 时打包发布,这里负责日常正确性把关。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支/PR 有新提交时,取消还在跑的旧任务,省 CI 时间。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint · Test · Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # 这里只做静态检查 / 打包 / 单测,不启动 Electron,
+          # 故跳过其二进制下载——更快也更不易因下载抖动而失败。
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build (typecheck + bundle)
+        run: npm run build

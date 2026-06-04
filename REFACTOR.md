@@ -56,6 +56,13 @@
   `InsightItem` 作私有零件留在 ListView;`InsightTaskLinker` 被详情页与弹窗共用 → 独立成共享文件
 - [x] **E5** 入口/根组件改名:`focusdo-entry → main.jsx`、`focusdo-app → App.jsx`(同步更新 index.html 与入口 import)
 
+## 运维改进
+
+- [x] **CI 闸门** `.github/workflows/ci.yml`:push 到 main / 开 PR 时自动跑 lint + test + build。
+  让本地的质量闸门真正被强制执行(此前 `release.yml` 只在打 tag 时跑 build)。
+- [ ] (建议)给番茄钟引擎 / 崩溃恢复补测试 —— 最复杂、最易回归、目前零覆盖
+- [ ] (建议)加 React error boundary —— 避免单个组件抛错导致整页白屏
+
 ---
 
 ### 注意事项
