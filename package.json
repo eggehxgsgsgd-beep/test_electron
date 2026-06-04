@@ -1,6 +1,6 @@
 {
   "name": "focusdo",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "A focused desktop task, pomodoro, and insights app.",
   "author": "FocusDo",
   "main": "./out/main/index.js",
